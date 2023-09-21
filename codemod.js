@@ -56,6 +56,7 @@ module.exports = function transformer(file, api, _options) {
     }
 
     hasModifications = true
+
     styledComponentsToCreate.push({ componentName, tagName, cssValue })
     delete openingElement.node.attributes[styleAttributeIndex]
 
@@ -70,11 +71,12 @@ module.exports = function transformer(file, api, _options) {
   const source = root.toSource()
 
   const lastImportStart = lastIndexOfRegex(source, /^import +[A-Za-z0-9\{\} ]+ from/m)
-  Const lastImportEnd = lastImportStart === -1 ? 0 : lastImportStart + source.slice(lastImportStart).indexOf("\n")
+  const lastImportEnd = lastImportStart === -1 ? 0 : lastImportStart + source.slice(lastImportStart).indexOf("\n")
 
   return (
     source.slice(0, lastImportEnd) +
     [
+      // Add import statement if styled isn't imported
       source.search(/import.*styled.*from\s*['"]styled-components['"]/m) === -1
         ? 'import styled from "styled-components"\n'
         : "",
