@@ -1,3 +1,9 @@
+function lastIndexOfRegex(string, regex, lastIndex = 0) {
+  // https://stackoverflow.com/a/273810
+  const index = string.search(regex)
+  return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
+}
+
 /**
  * @param {import("jscodeshift").FileInfo} file
  * @param {import("jscodeshift").API} api
@@ -6,8 +12,13 @@
  */
 module.exports = function transformer(file, api, _options) {
   const { jscodeshift } = api
-  const root = jscodeshift(file.source)
+  let root
 
+  try {
+    root = jscodeshift(file.source)
+  } catch {
+    return
+  }
   let hasModifications = false
 
   const styledComponentsToCreate = []
@@ -16,42 +27,58 @@ module.exports = function transformer(file, api, _options) {
     const { openingElement, closingElement } = jsxElement.__childCache
     const attributes = openingElement.node.attributes
 
-    if (openingElement.value.name.name.charAt(0).match(/[A-Z]/)) return
+    let tagName = openingElement.value.name.name
+    if (tagName === undefined) return
+    if (tagName.charAt(0).match(/[A-Z]/)) return
 
     const styleAttributeIndex = attributes.findIndex(attr => attr?.name?.name === "style")
     if (styleAttributeIndex === -1) return
 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
+    if (styleAttribute.value.expression.properties.find(property => property.type !== "Property")) return
 
-    const cssValue = Object.fromEntries(
-      styleAttribute.value.expression.properties.map(({ key: { name }, value: { value } }) => [name, value])
-    )
+    let cssValue
+    try {
+      cssValue = Object.fromEntries(
+        styleAttribute.value.expression.properties.map(property => {
+          const { key, value } = property
+          if (key.type !== "Identifier" || value.type !== "Literal") {
+            throw "Style attribute with template literals needed too be rewritten manually"
+          }
+          return [key.name, value.value]
+        })
+      )
+    } catch (error) {
+      // console.log(error)
+      return
+    }
 
-    let tagName = openingElement.value.name.name
     let componentName
-
     for (let i = 0; ; i++) {
       componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
       if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) break
     }
 
-    styledComponentsToCreate.push({ componentName, tagName, cssValue })
-
-    delete openingElement.node.attributes[styleAttributeIndex]
     hasModifications = true
+    styledComponentsToCreate.push({ componentName, tagName, cssValue })
+    delete openingElement.node.attributes[styleAttributeIndex]
 
     openingElement.value.name.name = componentName
-    closingElement.value.name.name = componentName
+    try {
+      closingElement.value.name.name = componentName
+    } catch (e) {
+      // console.log(closingElement)
+    }
   })
 
   if (!hasModifications) return
 
   const source = root.toSource()
 
-  let lastImportStart = source.lastIndexOf("import")
-  let lastImportEnd = source.slice(lastImportStart).indexOf("\n")
-  if (lastImportStart === -1 || lastImportEnd == -1) {
+  let lastImportStart = lastIndexOfRegex(source, /^import +[A-Za-z0-9\{\} ]+ from/m)
+  let lastImportEnd = lastImportStart + source.slice(lastImportStart).indexOf("\n")
+  if (lastImportStart === -1) {
     lastImportStart = 0
     lastImportEnd = 0
   }
