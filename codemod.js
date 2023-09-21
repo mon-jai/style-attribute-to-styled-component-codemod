@@ -1,4 +1,4 @@
-function lastIndexOfRegex(string, regex, lastIndex = 0) {
+function lastIndexOfRegex(string, regex, lastIndex = -1) {
   // https://stackoverflow.com/a/273810
   const index = string.search(regex)
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
@@ -12,13 +12,8 @@ function lastIndexOfRegex(string, regex, lastIndex = 0) {
  */
 module.exports = function transformer(file, api, _options) {
   const { jscodeshift } = api
-  let root
+  const root = jscodeshift(file.source)
 
-  try {
-    root = jscodeshift(file.source)
-  } catch {
-    return
-  }
   let hasModifications = false
 
   const styledComponentsToCreate = []
@@ -44,13 +39,13 @@ module.exports = function transformer(file, api, _options) {
         styleAttribute.value.expression.properties.map(property => {
           const { key, value } = property
           if (key.type !== "Identifier" || value.type !== "Literal") {
-            throw "Style attribute with template literals needed too be rewritten manually"
+            throw `${file.path}: Style attribute with JavaScript code needed too be rewritten manually.`
           }
           return [key.name, value.value]
         })
       )
     } catch (error) {
-      // console.log(error)
+      console.log(error)
       return
     }
 
@@ -67,9 +62,7 @@ module.exports = function transformer(file, api, _options) {
     openingElement.value.name.name = componentName
     try {
       closingElement.value.name.name = componentName
-    } catch (e) {
-      // console.log(closingElement)
-    }
+    } catch {}
   })
 
   if (!hasModifications) return
@@ -86,7 +79,9 @@ module.exports = function transformer(file, api, _options) {
   return (
     source.slice(0, lastImportEnd) +
     [
-      'import styled from "styled-components"\n',
+      source.search(/import.*styled.*from\s*['"]styled-components['"]/m) === -1
+        ? 'import styled from "styled-components"\n'
+        : "",
       ...styledComponentsToCreate.map(({ componentName, tagName, cssValue }) => {
         const cssString = Object.entries(cssValue)
           .map(([key, value]) => `  ${key}: ${value};`)
