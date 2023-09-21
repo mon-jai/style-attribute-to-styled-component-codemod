@@ -69,12 +69,8 @@ module.exports = function transformer(file, api, _options) {
 
   const source = root.toSource()
 
-  let lastImportStart = lastIndexOfRegex(source, /^import +[A-Za-z0-9\{\} ]+ from/m)
-  let lastImportEnd = lastImportStart + source.slice(lastImportStart).indexOf("\n")
-  if (lastImportStart === -1) {
-    lastImportStart = 0
-    lastImportEnd = 0
-  }
+  const lastImportStart = lastIndexOfRegex(source, /^import +[A-Za-z0-9\{\} ]+ from/m)
+  Const lastImportEnd = lastImportStart === -1 ? 0 : lastImportStart + source.slice(lastImportStart).indexOf("\n")
 
   return (
     source.slice(0, lastImportEnd) +
