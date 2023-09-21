@@ -13,10 +13,9 @@ function lastIndexOfRegex(string, regex, lastIndex = -1) {
 module.exports = function transformer(file, api, _options) {
   const { jscodeshift } = api
   const root = jscodeshift(file.source)
+  const styledComponentsToCreate = []
 
   let hasModifications = false
-
-  const styledComponentsToCreate = []
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
     const { openingElement, closingElement } = jsxElement.__childCache
