@@ -37,10 +37,13 @@ module.exports = function transformer(file, api, _options) {
       cssObject = Object.fromEntries(
         styleAttribute.value.expression.properties.map(property => {
           const { key, value } = property
-          if (key.type !== "Identifier" || value.type !== "Literal") {
+          if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
             throw `${file.path}: Style attribute with JavaScript code needed too be rewritten manually.`
           }
-          return [key.name.replaceAll(/[A-Z]/g, match => `-${match.toLowerCase()}`), value.value]
+          return [
+            (key.type === "Identifier" ? key.name : key.value).replaceAll(/[A-Z]/g, match => `-${match.toLowerCase()}`),
+            value.value,
+          ]
         })
       )
     } catch (error) {
