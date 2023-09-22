@@ -15,13 +15,13 @@ npm install -global jscodeshift loadsh
 To migrate all `jsx` files within `src` directory:
 
 ```
-jscodeshift -t codemod.ts src/**/*.jsx
+jscodeshift -t /path/to/codemod.ts src/**/*.jsx
 ```
 
 ## Known limitions
 
-- Computed CSS properties and values are not migrated.
-- Styles declared with spread operator are not migrated.
+- Styles declared with spread operator are not supported.
+- Computed CSS properties and values are skipped.
 
 ## License
 
