@@ -1,4 +1,4 @@
-import type { API, FileInfo, Options } from "jscodeshift"
+import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
 import { isEqual } from "lodash"
 
 function lastIndexOfRegex(string, regex, lastIndex = -1) {
@@ -24,7 +24,7 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
     if (tagName === undefined) return
     if (tagName.charAt(0).match(/[A-Z]/)) return
 
-    const styleAttributeIndex = attributes.findIndex(attr => attr?.name?.name === "style")
+    const styleAttributeIndex = attributes.findIndex((attribute: JSXAttribute) => attribute?.name?.name === "style")
     if (styleAttributeIndex === -1) return
 
     const styleAttribute = attributes[styleAttributeIndex]
@@ -40,10 +40,10 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
 
     const cssObjectEntries: [string, string][] = []
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
-      const property = styleAttribute.value.expression.properties[i]  
+      const property: Node = styleAttribute.value.expression.properties[i]
       if (property.type !== "Property") continue
 
-      const { key, value } = property
+      const { key, value } = property as Property
       // Identifier key: { color: red }
       // Literal key: { "color": red }
       if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
@@ -51,18 +51,19 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
         continue
       }
 
+      // @ts-expect-error
       const cssKey = (key.type === "Identifier" ? key.name : key.value).replaceAll(
         /[A-Z]/g,
-        match => `-${match.toLowerCase()}`
+        (match: string) => `-${match.toLowerCase()}`
       )
-      const cssValue = value.value
+      const cssValue = value.value as string
 
       cssObjectEntries.push([cssKey, cssValue])
       delete styleAttribute.value.expression.properties[i]
     }
     const cssObject = Object.fromEntries(cssObjectEntries)
 
-    let componentName
+    let componentName: string
     const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
     if (componentWithSameCSS !== undefined) {
       componentName = componentWithSameCSS.componentName
@@ -73,12 +74,11 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
           break
         }
       }
-
       styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
     }
 
     // Delete styleAttribute if there is no property left
-    if (styleAttribute.value.expression.properties.every(property => property === undefined)) {
+    if (styleAttribute.value.expression.properties.every((property: Property | undefined) => property === undefined)) {
       delete openingElement.node.attributes[styleAttributeIndex]
     }
 
