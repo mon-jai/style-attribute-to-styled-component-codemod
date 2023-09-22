@@ -21,7 +21,7 @@ jscodeshift -t codemod.ts src/**/*.jsx
 ## Known limitions
 
 - Computed CSS properties and values are not migrated.
-- Declarations within spread operator are not migrated.
+- Styles declared with spread operator are not migrated.
 
 ## License
 
