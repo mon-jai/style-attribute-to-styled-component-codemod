@@ -13,9 +13,9 @@ function lastIndexOfRegex(string, regex, lastIndex = -1) {
 module.exports = function transformer(file, api, _options) {
   const { jscodeshift } = api
   const root = jscodeshift(file.source)
-  const styledComponentsToCreate = []
 
   let hasModifications = false
+  const styledComponentsToCreate = []
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
     const { openingElement, closingElement } = jsxElement.__childCache
@@ -63,9 +63,7 @@ module.exports = function transformer(file, api, _options) {
     styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
 
     openingElement.value.name.name = componentName
-    try {
-      closingElement.value.name.name = componentName
-    } catch {}
+    if (closingElement.value !== null) closingElement.value.name.name = componentName
   })
 
   if (!hasModifications) return
@@ -79,7 +77,7 @@ module.exports = function transformer(file, api, _options) {
     source.slice(0, lastImportEnd) +
     [
       // Add import statement if styled isn't imported
-      source.search(/import.*styled.*from\s*['"]styled-components['"]/m) === -1
+      source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
         ? 'import styled from "styled-components"\n'
         : "",
       ...styledComponentsToCreate.map(({ componentName, tagName, cssValue }) => {
