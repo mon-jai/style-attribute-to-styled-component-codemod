@@ -62,7 +62,7 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
     const cssObject = Object.fromEntries(cssObjectEntries)
 
     let componentName
-    let componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
+    const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
     if (componentWithSameCSS !== undefined) {
       componentName = componentWithSameCSS.componentName
     } else {
