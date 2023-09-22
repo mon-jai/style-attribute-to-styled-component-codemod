@@ -4,7 +4,7 @@ A [jscodeshift](https://github.com/facebook/jscodeshift) codemod to migrate from
 
 ## Prerequireties
 
-- jscodeshift and loadsh installed globally
+- jscodeshift and loadsh installed globally.
 
 ```
 npm install -global jscodeshift loadsh
