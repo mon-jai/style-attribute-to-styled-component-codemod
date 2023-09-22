@@ -32,30 +32,35 @@ module.exports = function transformer(file, api, _options) {
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
     if (styleAttribute.value.expression.properties.find(property => property.type !== "Property")) return
 
-    let cssObject
-    try {
-      cssObject = Object.fromEntries(
-        styleAttribute.value.expression.properties.map(property => {
-          const { key, value } = property
-          if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
-            throw `${file.path}: Style attribute with JavaScript code needed too be rewritten manually.`
-          }
-          return [
-            (key.type === "Identifier" ? key.name : key.value).replaceAll(/[A-Z]/g, match => `-${match.toLowerCase()}`),
-            value.value,
-          ]
-        })
-      )
-    } catch (error) {
-      console.log(error)
+    hasModifications = true
+
+    // If styleAttribute is an empty object, delete the attribute but do not replace it with a styled component
+    if (styleAttribute.value.expression.properties.length === 0) {
+      delete openingElement.node.attributes[styleAttributeIndex]
       return
     }
 
-    hasModifications = true
-    delete openingElement.node.attributes[styleAttributeIndex]
+    const cssObjectEntries = []
+    for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
+      const { key, value } = styleAttribute.value.expression.properties[i]
 
-    // If styleAttribute is an empty object, delete it but do not replace it with a styled component
-    if (styleAttribute.value.expression.properties.length === 0) return
+      // Identifier key: { color: red }
+      // Literal key: { "color": red }
+      if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
+        // Style attribute with JavaScript code needed too be rewritten manually.
+        continue
+      }
+
+      const cssKey = (key.type === "Identifier" ? key.name : key.value).replaceAll(
+        /[A-Z]/g,
+        match => `-${match.toLowerCase()}`
+      )
+      const cssValue = value.value
+
+      cssObjectEntries.push([cssKey, cssValue])
+      delete styleAttribute.value.expression.properties[i]
+    }
+    const cssObject = Object.fromEntries(cssObjectEntries)
 
     let componentName
     for (let i = 0; ; i++) {
@@ -63,8 +68,13 @@ module.exports = function transformer(file, api, _options) {
       if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) break
     }
 
-    styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
+    // Delete styleAttribute if there is no property left
+    if (styleAttribute.value.expression.properties.every(property => property === undefined)) {
+      delete openingElement.node.attributes[styleAttributeIndex]
+    }
 
+    // Replace element with a styled component
+    styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
     openingElement.value.name.name = componentName
     if (closingElement.value !== null) closingElement.value.name.name = componentName
   })
