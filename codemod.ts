@@ -29,7 +29,6 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
-    if (styleAttribute.value.expression.properties.find(property => property.type !== "Property")) return
 
     hasModifications = true
 
@@ -42,11 +41,9 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
     const cssObjectEntries: [string, string][] = []
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
       const property = styleAttribute.value.expression.properties[i]  
-
       if (property.type !== "Property") continue
 
       const { key, value } = property
-
       // Identifier key: { color: red }
       // Literal key: { "color": red }
       if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
