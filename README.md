@@ -4,7 +4,7 @@ A [jscodeshift](https://github.com/facebook/jscodeshift) codemod to migrate from
 
 ## Prerequireties
 
-jscodeshift and loadsh installed globally
+- jscodeshift and loadsh installed globally
 
 ```
 npm install -global jscodeshift loadsh
@@ -20,8 +20,8 @@ jscodeshift -t codemod.ts src/**/*.jsx
 
 ## Known limitions
 
-- Computed CSS properties and values are not migrated
-- Declarations within spread operator are not migrated
+- Computed CSS properties and values are not migrated.
+- Declarations within spread operator are not migrated.
 
 ## License
 
