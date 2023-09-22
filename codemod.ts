@@ -9,7 +9,7 @@ function lastIndexOfRegex(string, regex, lastIndex = -1) {
 
 type StyledComponentToCreate = { componentName: string; tagName: string; cssValue: { [k: string]: string } }
 
-module.exports = function transformer(file: FileInfo, api: API, _options: Options) {
+export default function transformer(file: FileInfo, api: API, _options: Options) {
   const { jscodeshift } = api
   const root = jscodeshift(file.source)
 
