@@ -30,8 +30,6 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
 
-    hasModifications = true
-
     // If styleAttribute is an empty object, delete the attribute but do not replace it with a styled component
     if (styleAttribute.value.expression.properties.length === 0) {
       delete openingElement.node.attributes[styleAttributeIndex]
@@ -50,6 +48,8 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
         // Style attribute with JavaScript code needed too be rewritten manually.
         continue
       }
+
+      hasModifications = true
 
       // @ts-expect-error
       const cssKey = (key.type === "Identifier" ? key.name : key.value).replaceAll(
