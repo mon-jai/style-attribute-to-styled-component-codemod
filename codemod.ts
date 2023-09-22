@@ -1,27 +1,26 @@
+import type { API, FileInfo, Options } from "jscodeshift"
+import { isEqual } from "lodash"
+
 function lastIndexOfRegex(string, regex, lastIndex = -1) {
   // https://stackoverflow.com/a/273810
   const index = string.search(regex)
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
 }
 
-/**
- * @param {import("jscodeshift").FileInfo} file
- * @param {import("jscodeshift").API} api
- * @param {import("jscodeshift").Options} options
- * @returns {string | void}
- */
-module.exports = function transformer(file, api, _options) {
+type StyledComponentToCreate = { componentName: string; tagName: string; cssValue: { [k: string]: string } }
+
+module.exports = function transformer(file: FileInfo, api: API, _options: Options) {
   const { jscodeshift } = api
   const root = jscodeshift(file.source)
 
   let hasModifications = false
-  const styledComponentsToCreate = []
+  const styledComponentsToCreate: StyledComponentToCreate[] = []
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
-    const { openingElement, closingElement } = jsxElement.__childCache
+    const { openingElement, closingElement } = jsxElement.__childCache as any
     const attributes = openingElement.node.attributes
 
-    let tagName = openingElement.value.name.name
+    const tagName = openingElement.value.name.name
     if (tagName === undefined) return
     if (tagName.charAt(0).match(/[A-Z]/)) return
 
@@ -40,7 +39,7 @@ module.exports = function transformer(file, api, _options) {
       return
     }
 
-    const cssObjectEntries = []
+    const cssObjectEntries: [string, string][] = []
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
       const { key, value } = styleAttribute.value.expression.properties[i]
 
@@ -63,9 +62,18 @@ module.exports = function transformer(file, api, _options) {
     const cssObject = Object.fromEntries(cssObjectEntries)
 
     let componentName
-    for (let i = 0; ; i++) {
-      componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
-      if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) break
+    let componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
+    if (componentWithSameCSS !== undefined) {
+      componentName = componentWithSameCSS.componentName
+    } else {
+      for (let i = 0; ; i++) {
+        componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+        if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) {
+          break
+        }
+      }
+
+      styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
     }
 
     // Delete styleAttribute if there is no property left
@@ -74,7 +82,6 @@ module.exports = function transformer(file, api, _options) {
     }
 
     // Replace element with a styled component
-    styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
     openingElement.value.name.name = componentName
     if (closingElement.value !== null) closingElement.value.name.name = componentName
   })
