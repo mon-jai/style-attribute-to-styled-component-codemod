@@ -32,15 +32,15 @@ module.exports = function transformer(file, api, _options) {
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
     if (styleAttribute.value.expression.properties.find(property => property.type !== "Property")) return
 
-    let cssValue
+    let cssObject
     try {
-      cssValue = Object.fromEntries(
+      cssObject = Object.fromEntries(
         styleAttribute.value.expression.properties.map(property => {
           const { key, value } = property
           if (key.type !== "Identifier" || value.type !== "Literal") {
             throw `${file.path}: Style attribute with JavaScript code needed too be rewritten manually.`
           }
-          return [key.name, value.value]
+          return [key.name.replaceAll(/[A-Z]/g, match => `-${match.toLowerCase()}`), value.value]
         })
       )
     } catch (error) {
@@ -48,16 +48,19 @@ module.exports = function transformer(file, api, _options) {
       return
     }
 
+    hasModifications = true
+    delete openingElement.node.attributes[styleAttributeIndex]
+
+    // If styleAttribute is an empty object, delete it but do not replace it with a styled component
+    if (styleAttribute.value.expression.properties.length === 0) return
+
     let componentName
     for (let i = 0; ; i++) {
       componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
       if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) break
     }
 
-    hasModifications = true
-
-    styledComponentsToCreate.push({ componentName, tagName, cssValue })
-    delete openingElement.node.attributes[styleAttributeIndex]
+    styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
 
     openingElement.value.name.name = componentName
     try {
