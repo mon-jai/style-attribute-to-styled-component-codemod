@@ -9,7 +9,7 @@ function resolve(path) {
 }
 
 function rebrand(data) {
-  return data.toString().replaceAll("jscodeshift", PACKAGE_NAME).trim()
+  return data.toString().replaceAll("jscodeshift", PACKAGE_NAME)
 }
 
 const jscodeshift = spawn(
@@ -20,6 +20,6 @@ const jscodeshift = spawn(
 
 process.stdin.pipe(jscodeshift.stdin)
 
-jscodeshift.stdout.on("data", data => console.log(rebrand(data)))
-jscodeshift.stderr.on("data", data => console.error(rebrand(data)))
+jscodeshift.stdout.on("data", data => process.stdout.write(rebrand(data)))
+jscodeshift.stderr.on("data", data => process.stderr.write(rebrand(data)))
 jscodeshift.on("exit", process.exit)
