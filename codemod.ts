@@ -31,14 +31,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
     if (styleAttribute.value.expression.properties.every((property: Node) => property.type !== "Property")) return
 
-    hasModifications = true
-
-    // If styleAttribute is an empty object, delete the attribute but do not replace it with a styled component
-    if (styleAttribute.value.expression.properties.length === 0) {
-      delete openingElement.node.attributes[styleAttributeIndex]
-      return
-    }
-
     const cssObjectEntries: [string, string][] = []
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
       const property: Node = styleAttribute.value.expression.properties[i]
@@ -64,6 +56,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     }
     if (cssObjectEntries.length === 0) return
     const cssObject = Object.fromEntries(cssObjectEntries)
+
+    hasModifications = true
 
     let componentName: string
     const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
