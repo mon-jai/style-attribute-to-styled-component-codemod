@@ -29,7 +29,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
-    if (styleAttribute.value.expression.properties.every((property: Node) => property.type !== "Property")) return
 
     const cssObjectEntries: [string, string][] = []
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
