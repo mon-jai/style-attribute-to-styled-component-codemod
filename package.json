@@ -1,8 +1,33 @@
 {
+  "name": "style-attribute-to-styled-component-codemod",
+  "version": "0.1.0",
+  "description": "A jscodeshift codemod to migrate from style attributes to styled-components.",
+  "bin": {
+    "style-attribute-to-styled-component-codemod": "./bin/cli.mjs"
+  },
   "dependencies": {
-    "@types/jscodeshift": "^0.11.7",
-    "@types/lodash": "^4.14.199",
     "jscodeshift": "^0.15.0",
     "lodash": "^4.17.21"
-  }
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^4.2.0",
+    "@types/jscodeshift": "^0.11.7",
+    "@types/lodash": "^4.14.199",
+    "@types/node": "^20.6.4",
+    "prettier": "^3.0.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "styled-component",
+    "codemod",
+    "jscodeshift"
+  ],
+  "author": "Loh Ka Hong",
+  "license": "MIT"
 }
