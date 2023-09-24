@@ -1,7 +1,7 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
 import { isEqual } from "lodash"
 
-function lastIndexOfRegex(string, regex, lastIndex = -1) {
+function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
   // https://stackoverflow.com/a/273810
   const index = string.search(regex)
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
@@ -29,7 +29,7 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
-    if (styleAttribute.value.expression.properties.every(property => property.type !== "Property")) return
+    if (styleAttribute.value.expression.properties.every((property: Node) => property.type !== "Property")) return
 
     hasModifications = true
 
@@ -62,6 +62,7 @@ export default function transformer(file: FileInfo, api: API, _options: Options)
       cssObjectEntries.push([cssKey, cssValue])
       delete styleAttribute.value.expression.properties[i]
     }
+    if (cssObjectEntries.length === 0) return
     const cssObject = Object.fromEntries(cssObjectEntries)
 
     let componentName: string
