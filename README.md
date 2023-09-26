@@ -18,6 +18,8 @@ To migrate all `jsx` files within `src` directory:
 jscodeshift -t /path/to/codemod.ts src/**/*.jsx
 ```
 
+You should re-format your code after running the codemod.
+
 ## Known limitions
 
 - Styles declared with spread operator are not supported.
