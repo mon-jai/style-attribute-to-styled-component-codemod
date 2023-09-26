@@ -50,7 +50,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   })
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
-    console.log(Object.keys(jsxElement))
     const { openingElement, closingElement } = jsxElement.__childCache as any
     const attributes = openingElement.node.attributes
 
