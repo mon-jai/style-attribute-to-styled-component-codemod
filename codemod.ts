@@ -1,12 +1,10 @@
 import type {
   API,
   FileInfo,
-  Identifier,
   JSXAttribute,
   Node,
   Options,
   Property,
-  VariableDeclaration,
   VariableDeclarator
 } from "jscodeshift"
 import type { CSSProperties } from "react"
@@ -37,13 +35,18 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   let hasModifications = false
   const styledComponentsToCreate: StyledComponentToCreate[] = []
 
-  const declaredStyledComponentNames = root
-    .paths()[0]!
-    .value.program.body.filter((node: Node) => node.type === "VariableDeclaration")
-    .map(
-      (variableDeclaration: VariableDeclaration) =>
-        ((variableDeclaration.declarations[0] as VariableDeclarator).id as Identifier).name
+  const declaredStyledComponentNames: string[] = []
+  root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
+    const variableDeclarator = variableDeclaration.node.declarations.find(
+      (declaration): declaration is VariableDeclarator => declaration.type == "VariableDeclarator"
     )
+    if (variableDeclarator === undefined) return
+
+    const id = variableDeclarator.id
+    if (id.type !== "Identifier") return
+
+    declaredStyledComponentNames.push(id.name)
+  })
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
     console.log(Object.keys(jsxElement))
