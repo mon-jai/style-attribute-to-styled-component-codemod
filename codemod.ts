@@ -1,6 +1,8 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
 import type { CSSProperties } from "react"
 
+type StyledComponentToCreate = { componentName: string; tagName: string; cssValue: CSSProperties }
+
 function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
 
@@ -17,8 +19,6 @@ function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number
   const index = string.search(regex)
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
 }
-
-type StyledComponentToCreate = { componentName: string; tagName: string; cssValue: { [k: string]: string } }
 
 export default function transform(file: FileInfo, api: API, _options: Options): string | void {
   const { jscodeshift } = api
