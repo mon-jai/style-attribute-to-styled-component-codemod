@@ -1,30 +1,30 @@
 # style-attribute-to-styled-component-codemod
 
-A [jscodeshift](https://github.com/facebook/jscodeshift) codemod to migrate from style attributes to [styled-components](https://github.com/styled-components/styled-components).
+A [jscodeshift](https://github.com/facebook/jscodeshift) codemod for migrating from style attributes to [styled-components](https://github.com/styled-components/styled-components).
 
 ## Prerequireties
 
-jscodeshift installed globally.
+[jscodeshift](https://www.npmjs.com/package/jscodeshift) installed globally.
 
-```
-npm install -global jscodeshift
+```sh
+npm install -g jscodeshift
 ```
 
 ## Usage
 
-To migrate all `jsx` files within `src` directory:
+To migrate all `jsx` files within the `src` directory:
 
-```
+```sh
 jscodeshift -t /path/to/codemod.ts src/**/*.jsx
 ```
 
-You should re-format your code after running the codemod.
+You should reformat your code after running the codemod.
 
-## Known limitions
+## Known Limitations
 
-- Styles declared with spread operator are not supported.
-- Computed CSS properties and values are skipped.
+- Style objects declared with the spread operator are not supported.
+- Dynamically computed CSS properties and values are skipped.
 
 ## License
 
-MIT
+[MIT](LICENSE)
