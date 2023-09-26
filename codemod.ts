@@ -17,7 +17,8 @@ function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boo
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
   // https://stackoverflow.com/a/273810
   const index = string.search(regex)
-  return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index)
+  console.log(lastIndex)
+  return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index + 1 + lastIndex)
 }
 
 export default function transform(file: FileInfo, api: API, _options: Options): string | void {
@@ -125,8 +126,9 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
   const source = root.toSource()
 
-  const lastImportStart = lastIndexOfRegex(source, /^import +[A-Za-z0-9\{\} ]+ from/m)
+  const lastImportStart = lastIndexOfRegex(source, /^import\s[A-Za-z0-9\{\},\s]+ from/m)
   const lastImportEnd = lastImportStart === -1 ? 0 : lastImportStart + source.slice(lastImportStart).indexOf("\n")
+  console.log(source.slice(lastImportStart, lastImportEnd))
 
   return (
     source.slice(0, lastImportEnd) +
@@ -134,7 +136,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       // Add import statement if styled isn't imported
       source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
         ? 'import styled from "styled-components"\n'
-        : "",
+        : "\n",
       ...styledComponentsToCreate.map(({ componentName, tagName, css }) => {
         const cssString = Object.entries(css)
           .map(([property, value]) => `  ${property}: ${value};`)
