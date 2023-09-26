@@ -2,10 +2,12 @@
 
 A [jscodeshift](https://github.com/facebook/jscodeshift) codemod to migrate from style attributes to [styled-components](https://github.com/styled-components/styled-components).
 
-## Installation
+## Prerequireties
+
+jscodeshift installed globally.
 
 ```
-npm install -global style-attribute-to-styled-component-codemod
+npm install -global jscodeshift
 ```
 
 ## Usage
@@ -13,7 +15,7 @@ npm install -global style-attribute-to-styled-component-codemod
 To migrate all `jsx` files within `src` directory:
 
 ```
-style-attribute-to-styled-component-codemod src/**/*.jsx
+jscodeshift -t /path/to/codemod.ts src/**/*.jsx
 ```
 
 ## Known limitions
