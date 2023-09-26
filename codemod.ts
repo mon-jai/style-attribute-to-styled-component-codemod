@@ -1,4 +1,14 @@
-import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
+import type {
+  API,
+  FileInfo,
+  Identifier,
+  JSXAttribute,
+  Node,
+  Options,
+  Property,
+  VariableDeclaration,
+  VariableDeclarator
+} from "jscodeshift"
 import type { CSSProperties } from "react"
 
 type StyledComponentToCreate = { componentName: string; tagName: string; css: CSSProperties }
@@ -27,7 +37,16 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   let hasModifications = false
   const styledComponentsToCreate: StyledComponentToCreate[] = []
 
+  const declaredStyledComponentNames = root
+    .paths()[0]!
+    .value.program.body.filter((node: Node) => node.type === "VariableDeclaration")
+    .map(
+      (variableDeclaration: VariableDeclaration) =>
+        ((variableDeclaration.declarations[0] as VariableDeclarator).id as Identifier).name
+    )
+
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
+    console.log(Object.keys(jsxElement))
     const { openingElement, closingElement } = jsxElement.__childCache as any
     const attributes = openingElement.node.attributes
 
@@ -76,7 +95,10 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     } else {
       for (let i = 0; ; i++) {
         componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
-        if (!styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName)) {
+        if (
+          !styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName) &&
+          !declaredStyledComponentNames.includes(componentName)
+        ) {
           break
         }
       }
