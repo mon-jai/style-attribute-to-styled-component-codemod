@@ -2,7 +2,7 @@
 
 A [jscodeshift](https://github.com/facebook/jscodeshift) codemod for migrating from style attributes to [styled-components](https://github.com/styled-components/styled-components).
 
-## Prerequireties
+## Prerequisites
 
 [jscodeshift](https://www.npmjs.com/package/jscodeshift) installed globally.
 
