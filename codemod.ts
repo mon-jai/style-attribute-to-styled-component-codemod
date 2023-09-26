@@ -1,5 +1,16 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
-import { isEqual } from "lodash"
+import type { CSSProperties } from "react"
+
+function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
+  if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
+
+  for (const key in object_1) {
+    if (!(key in object_2)) return false
+    if (object_1[key as keyof typeof object_1] !== object_2[key as keyof typeof object_2]) return false
+  }
+
+  return true
+}
 
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
   // https://stackoverflow.com/a/273810
@@ -60,7 +71,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     hasModifications = true
 
     let componentName: string
-    const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqual(cssValue, cssObject))
+    const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqualCSSObject(cssValue, cssObject))
     if (componentWithSameCSS !== undefined) {
       componentName = componentWithSameCSS.componentName
     } else {
