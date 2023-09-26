@@ -1,7 +1,7 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property } from "jscodeshift"
 import type { CSSProperties } from "react"
 
-type StyledComponentToCreate = { componentName: string; tagName: string; cssValue: CSSProperties }
+type StyledComponentToCreate = { componentName: string; tagName: string; css: CSSProperties }
 
 function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
@@ -41,7 +41,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
 
-    const cssObjectEntries: [string, string][] = []
+    const cssObject: CSSProperties = {}
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
       const property: Node = styleAttribute.value.expression.properties[i]
       if (property.type !== "Property") continue
@@ -54,23 +54,23 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         continue
       }
 
-      // @ts-expect-error
-      const cssKey = (key.type === "Identifier" ? key.name : key.value).replaceAll(
+      const cssProperty = (key.type === "Identifier" ? key.name : (key.value as string)).replaceAll(
         /[A-Z]/g,
         (match: string) => `-${match.toLowerCase()}`
       )
       const cssValue = value.value as string
 
-      cssObjectEntries.push([cssKey, cssValue])
+      // error TS2590: Expression produces a union type that is too complex to represent.
+      // @ts-expect-error
+      cssObject[cssProperty] = cssValue
       delete styleAttribute.value.expression.properties[i]
     }
-    if (cssObjectEntries.length === 0) return
-    const cssObject = Object.fromEntries(cssObjectEntries)
+    if (Object.keys(cssObject).length === 0) return
 
     hasModifications = true
 
     let componentName: string
-    const componentWithSameCSS = styledComponentsToCreate.find(({ cssValue }) => isEqualCSSObject(cssValue, cssObject))
+    const componentWithSameCSS = styledComponentsToCreate.find(({ css }) => isEqualCSSObject(css, cssObject))
     if (componentWithSameCSS !== undefined) {
       componentName = componentWithSameCSS.componentName
     } else {
@@ -80,7 +80,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           break
         }
       }
-      styledComponentsToCreate.push({ componentName, tagName, cssValue: cssObject })
+      styledComponentsToCreate.push({ componentName, tagName, css: cssObject })
     }
 
     // Delete styleAttribute if there is no property left
@@ -107,9 +107,9 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
         ? 'import styled from "styled-components"\n'
         : "",
-      ...styledComponentsToCreate.map(({ componentName, tagName, cssValue }) => {
-        const cssString = Object.entries(cssValue)
-          .map(([key, value]) => `  ${key}: ${value};`)
+      ...styledComponentsToCreate.map(({ componentName, tagName, css }) => {
+        const cssString = Object.entries(css)
+          .map(([property, value]) => `  ${property}: ${value};`)
           .join("\n")
         return `const ${componentName} = styled.${tagName}\`\n${cssString}\n\`\n`
       })
