@@ -1,12 +1,4 @@
-import type {
-  API,
-  FileInfo,
-  JSXAttribute,
-  Node,
-  Options,
-  Property,
-  VariableDeclarator
-} from "jscodeshift"
+import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift"
 import type { CSSProperties } from "react"
 
 type StyledComponentToCreate = { componentName: string; tagName: string; css: CSSProperties }
@@ -38,9 +30,18 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   const declaredStyledComponentNames: string[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
     const variableDeclarator = variableDeclaration.node.declarations.find(
-      (declaration): declaration is VariableDeclarator => declaration.type == "VariableDeclarator"
+      (declaration): declaration is VariableDeclarator => declaration.type === "VariableDeclarator"
     )
     if (variableDeclarator === undefined) return
+
+    if (
+      variableDeclarator.init?.type !== "TaggedTemplateExpression" ||
+      variableDeclarator.init.tag.type !== "MemberExpression" ||
+      variableDeclarator.init.tag.object.type !== "Identifier" ||
+      variableDeclarator.init.tag.object.name !== "styled"
+    ) {
+      return
+    }
 
     const id = variableDeclarator.id
     if (id.type !== "Identifier") return
@@ -76,16 +77,19 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         continue
       }
 
+      delete styleAttribute.value.expression.properties[i]
+
+      if (value.value === "") continue
+
       const cssProperty = (key.type === "Identifier" ? key.name : (key.value as string)).replaceAll(
         /[A-Z]/g,
         (match: string) => `-${match.toLowerCase()}`
       )
-      const cssValue = value.value as string
+      const cssValue = value.value as CSSProperties[keyof CSSProperties]
 
       // error TS2590: Expression produces a union type that is too complex to represent.
       // @ts-expect-error
       cssObject[cssProperty] = cssValue
-      delete styleAttribute.value.expression.properties[i]
     }
     if (Object.keys(cssObject).length === 0) return
 
