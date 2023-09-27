@@ -188,19 +188,21 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     )
 
     if (sameComponent !== undefined) {
+      // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, c } }
+      // Output = { ComponentA: { a, b, c } }
       name = sameComponent.name
     } else if (
       similarComponent !== undefined &&
-      // If `similarComponent` is already being inherited, avoid editing it
-      styledComponentsFromExistingComponent.find(component => component.extendedFrom === similarComponent) !== undefined
+      (Object.keys(differentStyle).length === 0 ||
+        // If `similarComponent` is already being inherited, avoid editing it
+        styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) !==
+          undefined)
     ) {
       name = newComponentName(tagName, allStyledComponents)
       let baseComponent
 
-      if (
+      if (Object.keys(differentStyle).length === 0) {
         // The current component's CSS is a superset of `similarComponent`'s CSS
-        Object.keys(differentStyle).length === 0
-      ) {
         // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
         // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
         baseComponent = similarComponent
@@ -214,8 +216,10 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           tagName,
           css: commonStyle
         }
+        // Push Base
         styledComponentsFromScratch.push(baseComponent)
 
+        // Push ComponentA
         styledComponentsFromScratch = styledComponentsFromScratch.filter(({ name }) => name !== similarComponent.name)
         styledComponentsFromExistingComponent.push({
           ...similarComponent,
@@ -224,6 +228,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         })
       }
 
+      // Push ComponentB
       styledComponentsFromExistingComponent.push({
         name,
         tagName,
@@ -235,10 +240,9 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d }, ...{ ComponentC: ComponentA & { e } } }
       // Output = { ComponentA: { a, b, c }, ComponentB: { a, b, d }, ...{ ComponentC: ComponentA & { e } } }
 
-      // Otherwise
+      // Otherwise, the component is unique
       // Input = { ComponentA: { a, b, c } }
       // Output = { ComponentA: { a, b, c } }
-
       name = newComponentName(tagName, allStyledComponents)
       styledComponentsFromScratch.push({ name, tagName, css: cssObject })
     }
