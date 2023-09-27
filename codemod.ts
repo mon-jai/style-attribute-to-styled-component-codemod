@@ -4,8 +4,8 @@ type CSSDeclarations = { [key: string]: string | number }
 
 type StyledComponent = { name: string; tagName: string; css: CSSDeclarations }
 
-type StyledComponentFromExistingComponent = StyledComponent & {
-  extendedFrom: StyledComponentFromExistingComponent | StyledComponent
+type StyledComponentExtendedFromOtherComponent = StyledComponent & {
+  extendedFrom: StyledComponentExtendedFromOtherComponent | StyledComponent
 }
 
 const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
@@ -35,7 +35,7 @@ function newComponentName(tagName: string, existingComponents: { name: string }[
 
 function findSimilarComponent(
   component: Omit<StyledComponent, "name">,
-  existingComponents: (StyledComponent | StyledComponentFromExistingComponent)[]
+  existingComponents: (StyledComponent | StyledComponentExtendedFromOtherComponent)[]
 ) {
   let maximumSameDeclarationCount = 0
   let mostSimilarComponent: StyledComponent | undefined = undefined
@@ -93,7 +93,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
   let hasModifications = false
   let styledComponentsFromScratch: StyledComponent[] = []
-  const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
+  const styledComponentsFromExistingComponent: StyledComponentExtendedFromOtherComponent[] = []
 
   const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
