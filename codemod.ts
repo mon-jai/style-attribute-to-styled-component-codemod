@@ -202,8 +202,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           tagName,
           css: commonStyle
         }
-        styledComponentsFromScratch.push(baseComponent)
 
+        styledComponentsFromScratch.push(baseComponent)
         styledComponentsFromScratch = styledComponentsFromScratch.filter(
           component => component.name !== similarComponent!.name
         )
