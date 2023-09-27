@@ -92,7 +92,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
   let hasModifications = false
   let styledComponentsFromScratch: StyledComponent[] = []
-  let styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
+  const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
+  const baseComponentNames: string[] = []
 
   const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
@@ -172,7 +173,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     hasModifications = true
 
     let name: string
-    const allStyledComponent = [
+    const allStyledComponents = [
       ...existingStyledComponents,
       ...styledComponentsFromScratch,
       ...styledComponentsFromExistingComponent
@@ -186,13 +187,14 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     if (componentWithSameCSS !== undefined) {
       name = componentWithSameCSS.name
     } else {
-      name = newComponentName(tagName, allStyledComponent)
+      name = newComponentName(tagName, allStyledComponents)
 
-      let { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
+      const { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
         { tagName, css: cssObject },
-        allStyledComponent.filter(
-          component => component.tagName !== "ExtendedComponent" && !("extendedFrom" in component)
-        )
+        [
+          ...existingStyledComponents.filter(component => component.tagName !== "ExtendedComponent"),
+          ...styledComponentsFromScratch
+        ].filter(({ name }) => !baseComponentNames.includes(name))
       )
 
       if (typeof similarComponent !== "undefined") {
@@ -200,7 +202,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
         if (Object.keys(differentStyle).length > 0) {
           baseComponent = {
-            name: newComponentName(tagName, allStyledComponent),
+            name: newComponentName(tagName, allStyledComponents),
             tagName,
             css: commonStyle
           }
@@ -213,14 +215,13 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           styledComponentsFromScratch = styledComponentsFromScratch.filter(
             component => component.name !== similarComponent!.name
           )
-          styledComponentsFromExistingComponent = styledComponentsFromExistingComponent.filter(
-            component => component.name !== similarComponent!.name
-          )
           styledComponentsFromExistingComponent.push(similarComponentExtended)
         } else {
           // The current component's style is a superset of similarComponent's style
           baseComponent = similarComponent
         }
+
+        baseComponentNames.push(baseComponent.name)
 
         styledComponentsFromExistingComponent.push({
           name,
