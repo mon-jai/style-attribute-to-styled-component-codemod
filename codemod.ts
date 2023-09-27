@@ -1,13 +1,13 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift"
-import type { CSSProperties } from "react"
 
-type StyledComponent = { name: string; css: CSSProperties }
+type CSSDeclarations = { [key: string]: string | number }
+
+type StyledComponent = { name: string; tagName: string; css: CSSDeclarations }
 type StyledComponentFromExistingComponent = StyledComponent & { extendedFrom: StyledComponent }
-type StyledComponentFromScratch = StyledComponent & { tagName: string }
 
 const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
 
-function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
+function isEqualCSSObject(object_1: CSSDeclarations, object_2: CSSDeclarations): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
 
   for (const key in object_1) {
@@ -18,26 +18,51 @@ function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boo
   return true
 }
 
-function findSimilarComponent(cssObject: CSSProperties, components: StyledComponent[]) {
+function findSimilarComponent({ tagName, css }: Omit<StyledComponent, "name">, components: StyledComponent[]) {
   let maximumSameDeclarationCount = 0
   let mostSimilarComponent: StyledComponent | undefined = undefined
+  let mostSimilarComponentCommonStyle: CSSDeclarations = {}
+  let mostSimilarComponentDifferentStyle: CSSDeclarations = {}
 
   for (const component of components) {
-    // cssObject must contains all keys from the inherited component
-    if (Object.keys(component.css).find(key => !(key in cssObject))) continue
+    if (tagName !== component.tagName) continue
 
     let sameKeyCount = 0
+    let commonStyle: CSSDeclarations = {}
+    let differentStyle: CSSDeclarations = {}
+
     for (const key in component.css) {
-      if (cssObject[key as keyof typeof cssObject] === component.css[key as keyof typeof component.css]) sameKeyCount++
+      if (css[key as keyof typeof css] === component.css[key as keyof typeof component.css]) {
+        sameKeyCount++
+        commonStyle[key] === component.css[key as keyof typeof component.css]
+      } else {
+        differentStyle[key] === component.css[key as keyof typeof component.css]
+      }
     }
 
     if (sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT && sameKeyCount > maximumSameDeclarationCount) {
       maximumSameDeclarationCount = sameKeyCount
       mostSimilarComponent = component
+      mostSimilarComponentCommonStyle = commonStyle
+      mostSimilarComponentDifferentStyle = differentStyle
     }
   }
 
-  return mostSimilarComponent
+  return {
+    similarComponent: mostSimilarComponent,
+    commonStyle: mostSimilarComponentCommonStyle,
+    differentStyle: mostSimilarComponentDifferentStyle
+  }
+}
+
+function newComponentName(tagName: string, existingComponents: StyledComponent[]) {
+  let name: string
+  for (let i = 0; ; i++) {
+    name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+    if (!existingComponents.find(component => component.name === name)) {
+      return name
+    }
+  }
 }
 
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
@@ -46,7 +71,7 @@ function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index + 1 + lastIndex)
 }
 
-function cssObjectToString(object: CSSProperties) {
+function cssObjectToString(object: CSSDeclarations) {
   return Object.entries(object)
     .map(([property, value]) => `  ${property}: ${value};`)
     .join("\n")
@@ -57,8 +82,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   const root = jscodeshift(file.source)
 
   let hasModifications = false
+  const styledComponentsFromScratch: StyledComponent[] = []
   const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
-  const styledComponentsFromScratch: StyledComponentFromScratch[] = []
 
   const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
@@ -71,7 +96,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       variableDeclarator.init?.type !== "TaggedTemplateExpression" ||
       variableDeclarator.init.tag.type !== "MemberExpression" ||
       variableDeclarator.init.tag.object.type !== "Identifier" ||
-      variableDeclarator.init.tag.object.name !== "styled"
+      variableDeclarator.init.tag.object.name !== "styled" ||
+      variableDeclarator.init.tag.property.type !== "Identifier"
     ) {
       return
     }
@@ -82,15 +108,15 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     const { name } = id
     existingStyledComponents.push({
       name,
+      tagName: variableDeclarator.init.tag.property.name,
       css: Object.fromEntries(
         variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
           .map(declaration => declaration.trim())
           .filter(declaration => declaration.includes(":"))
           .map(declaration => declaration.split(":").map(value => value.trim()) as [string, string])
-      ) as CSSProperties
+      ) as CSSDeclarations
     })
   })
-  const existingStyledComponentNames = existingStyledComponents.map(({ name }) => name)
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
     const { openingElement, closingElement } = jsxElement.__childCache as any
@@ -106,7 +132,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     const styleAttribute = attributes[styleAttributeIndex]
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
 
-    const cssObject: CSSProperties = {}
+    const cssObject: CSSDeclarations = {}
     for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
       const property: Node = styleAttribute.value.expression.properties[i]
       if (property.type !== "Property") continue
@@ -127,10 +153,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         /[A-Z]/g,
         (match: string) => `-${match.toLowerCase()}`
       )
-      const cssValue = value.value as CSSProperties[keyof CSSProperties]
+      const cssValue = value.value as CSSDeclarations[keyof CSSDeclarations]
 
-      // error TS2590: Expression produces a union type that is too complex to represent.
-      // @ts-expect-error
       cssObject[cssProperty] = cssValue
     }
     if (Object.keys(cssObject).length === 0) return
@@ -138,16 +162,12 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     hasModifications = true
 
     let name: string
-    for (let i = 0; ; i++) {
-      name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
-      if (
-        !styledComponentsFromScratch.find(componentToCreate => componentToCreate.name === name) &&
-        !styledComponentsFromExistingComponent.find(componentToCreate => componentToCreate.name === name) &&
-        !existingStyledComponentNames.includes(name)
-      ) {
-        break
-      }
-    }
+    const allStyledComponent = [
+      ...existingStyledComponents,
+      ...styledComponentsFromScratch,
+      ...styledComponentsFromExistingComponent
+    ]
+
     const componentWithSameCSS =
       styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(cssObject, css)) ??
       styledComponentsFromExistingComponent.find(({ css, extendedFrom }) =>
@@ -156,36 +176,30 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     if (componentWithSameCSS !== undefined) {
       name = componentWithSameCSS.name
     } else {
-      for (let i = 0; ; i++) {
-        name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
-        if (
-          !styledComponentsFromScratch.find(componentToCreate => componentToCreate.name === name) &&
-          !styledComponentsFromExistingComponent.find(componentToCreate => componentToCreate.name === name) &&
-          !existingStyledComponentNames.includes(name)
-        ) {
-          break
-        }
-      }
-
-      let similarComponent = findSimilarComponent(cssObject, [
-        ...existingStyledComponents,
-        ...styledComponentsFromScratch
-      ])
+      let { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
+        { tagName, css: cssObject },
+        allStyledComponent
+      )
 
       if (similarComponent !== undefined) {
-        const css = Object.fromEntries(
-          Object.entries(cssObject).filter(([property, value]) => {
-            if (
-              property in similarComponent!.css &&
-              similarComponent!.css[property as keyof typeof similarComponent] === value
-            ) {
-              return false
-            }
-            return true
-          })
-        )
-        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent, css })
+        similarComponent.css = commonStyle
+
+        styledComponentsFromExistingComponent.push({
+          name: newComponentName(tagName, allStyledComponent),
+          tagName,
+          extendedFrom: similarComponent,
+          css: differentStyle
+        })
+
+        name = newComponentName(tagName, allStyledComponent)
+        styledComponentsFromExistingComponent.push({
+          name,
+          tagName,
+          extendedFrom: similarComponent,
+          css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
+        })
       } else {
+        name = newComponentName(tagName, allStyledComponent)
         styledComponentsFromScratch.push({ name, tagName, css: cssObject })
       }
     }
