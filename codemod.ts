@@ -22,9 +22,8 @@ function isEqualCSSObject(object_1: CSSDeclarations, object_2: CSSDeclarations):
 }
 
 function newComponentName(tagName: string, existingComponents: { name: string }[]) {
-  let name: string
   for (let i = 0; ; i++) {
-    name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+    const name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
     if (existingComponents.find(component => component.name === name)) continue
 
     // Add a placeholder for the returned name
@@ -34,7 +33,10 @@ function newComponentName(tagName: string, existingComponents: { name: string }[
   }
 }
 
-function findSimilarComponent(component: Omit<StyledComponent, "name">, existingComponents: StyledComponent[]) {
+function findSimilarComponent(
+  component: Omit<StyledComponent, "name">,
+  existingComponents: (StyledComponent | StyledComponentFromExistingComponent)[]
+) {
   let maximumSameDeclarationCount = 0
   let mostSimilarComponent: StyledComponent | undefined = undefined
   let mostSimilarComponentCommonStyle: CSSDeclarations = {}
@@ -45,8 +47,8 @@ function findSimilarComponent(component: Omit<StyledComponent, "name">, existing
     if (!Object.keys(existingComponent.css).every(property => property in component.css)) continue
 
     let sameKeyCount = 0
-    let commonStyle: CSSDeclarations = {}
-    let differentStyle: CSSDeclarations = {}
+    const commonStyle: CSSDeclarations = {}
+    const differentStyle: CSSDeclarations = {}
 
     for (const property in existingComponent.css) {
       const value = existingComponent.css[property as keyof typeof existingComponent.css]!
@@ -92,7 +94,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   let hasModifications = false
   let styledComponentsFromScratch: StyledComponent[] = []
   const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
-  const baseComponentNames: string[] = []
 
   const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
@@ -183,10 +184,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       )
     const { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
       { tagName, css: cssObject },
-      [
-        ...existingStyledComponents.filter(component => component.tagName !== "ExtendedComponent"),
-        ...styledComponentsFromScratch
-      ].filter(({ name }) => !baseComponentNames.includes(name))
+      allStyledComponents.filter(component => component.tagName !== "ExtendedComponent")
     )
 
     if (sameComponent !== undefined) {
@@ -195,29 +193,32 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       name = newComponentName(tagName, allStyledComponents)
       let baseComponent
 
-      if (Object.keys(differentStyle).length > 0) {
+      if (
+        // The current component's CSS is a superset of `similarComponent`'s CSS
+        Object.keys(differentStyle).length === 0 ||
+        // `similarComponent` is already being inherited, avoid making edit to it
+        styledComponentsFromExistingComponent.find(component => component.extendedFrom === similarComponent) !==
+          undefined
+      ) {
+        baseComponent = similarComponent
+      } else {
+        // Create a common base for the current component and `similarComponent`
         baseComponent = {
           name: newComponentName(tagName, allStyledComponents),
           tagName,
           css: commonStyle
         }
-
         styledComponentsFromScratch.push(baseComponent)
+
         styledComponentsFromScratch = styledComponentsFromScratch.filter(
           component => component.name !== similarComponent.name
         )
-
         styledComponentsFromExistingComponent.push({
           ...similarComponent,
           css: differentStyle,
           extendedFrom: baseComponent
         })
-      } else {
-        // The current component's CSS is a superset of similarComponent's CSS
-        baseComponent = similarComponent
       }
-
-      baseComponentNames.push(baseComponent.name)
 
       styledComponentsFromExistingComponent.push({
         name,
