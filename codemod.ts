@@ -42,12 +42,11 @@ function findSimilarComponent(component: Omit<StyledComponent, "name">, existing
 
   for (const existingComponent of existingComponents) {
     if (component.tagName !== existingComponent.tagName) continue
+    if (!Object.keys(existingComponent.css).every(property => property in component.css)) continue
 
     let sameKeyCount = 0
     let commonStyle: CSSDeclarations = {}
     let differentStyle: CSSDeclarations = {}
-
-    if (!Object.keys(existingComponent.css).every(property => property in component.css)) continue
 
     for (const property in existingComponent.css) {
       const value = existingComponent.css[property as keyof typeof existingComponent.css]!
@@ -125,8 +124,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
           .map(declaration => declaration.trim())
           .filter(declaration => declaration.includes(":"))
-          .map(declaration => declaration.split(":").map(value => value.trim()) as [string, string])
-      ) as CSSDeclarations
+          .map(declaration => declaration.split(":").map(value => value.trim()))
+      )
     })
   })
 
@@ -205,7 +204,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
         styledComponentsFromScratch.push(baseComponent)
         styledComponentsFromScratch = styledComponentsFromScratch.filter(
-          component => component.name !== similarComponent!.name
+          component => component.name !== similarComponent.name
         )
 
         styledComponentsFromExistingComponent.push({
@@ -214,7 +213,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           extendedFrom: baseComponent
         })
       } else {
-        // The current component's style is a superset of similarComponent's style
+        // The current component's CSS is a superset of similarComponent's CSS
         baseComponent = similarComponent
       }
 
