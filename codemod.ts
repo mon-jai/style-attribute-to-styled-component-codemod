@@ -2,7 +2,7 @@ import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDecl
 import type { CSSProperties } from "react"
 
 type StyledComponent = { name: string; css: CSSProperties }
-type StyledComponentFromExistingComponent = StyledComponent & { extendedFrom: string }
+type StyledComponentFromExistingComponent = StyledComponent & { extendedFrom: StyledComponent }
 type StyledComponentFromScratch = StyledComponent & { tagName: string }
 
 const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
@@ -23,9 +23,11 @@ function findSimilarComponent(cssObject: CSSProperties, components: StyledCompon
   let mostSimilarComponent: StyledComponent | undefined = undefined
 
   for (const component of components) {
+    // cssObject must contains all keys from the inherited component
+    if (Object.keys(component.css).find(key => !(key in cssObject))) continue
+
     let sameKeyCount = 0
-    for (const key in cssObject) {
-      if (!(key in component.css)) continue
+    for (const key in component.css) {
       if (cssObject[key as keyof typeof cssObject] === component.css[key as keyof typeof component.css]) sameKeyCount++
     }
 
@@ -136,7 +138,21 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     hasModifications = true
 
     let name: string
-    const componentWithSameCSS = styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(css, cssObject))
+    for (let i = 0; ; i++) {
+      name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+      if (
+        !styledComponentsFromScratch.find(componentToCreate => componentToCreate.name === name) &&
+        !styledComponentsFromExistingComponent.find(componentToCreate => componentToCreate.name === name) &&
+        !existingStyledComponentNames.includes(name)
+      ) {
+        break
+      }
+    }
+    const componentWithSameCSS =
+      styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(cssObject, css)) ??
+      styledComponentsFromExistingComponent.find(({ css, extendedFrom }) =>
+        isEqualCSSObject(cssObject, { ...extendedFrom.css, ...css })
+      )
     if (componentWithSameCSS !== undefined) {
       name = componentWithSameCSS.name
     } else {
@@ -168,7 +184,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
             return true
           })
         )
-        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent.name, css })
+        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent, css })
       } else {
         styledComponentsFromScratch.push({ name, tagName, css: cssObject })
       }
@@ -205,7 +221,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     source.slice(lastImportEnd, exportDefaultStart) +
     styledComponentsFromExistingComponent
       .map(
-        ({ name, extendedFrom, css }) => `const ${name} = styled(${extendedFrom})\`\n${cssObjectToString(css)}\n\`\n`
+        ({ name, extendedFrom, css }) =>
+          `const ${name} = styled(${extendedFrom.name})\`\n${cssObjectToString(css)}\n\`\n`
       )
       .join("\n") +
     source.slice(exportDefaultStart)
