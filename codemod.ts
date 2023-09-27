@@ -1,5 +1,4 @@
-import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift";
-
+import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift"
 
 type CSSDeclarations = { [key: string]: string | number }
 
@@ -37,7 +36,7 @@ function newComponentName(tagName: string, existingComponents: { name: string }[
 
 function findSimilarComponent(component: Omit<StyledComponent, "name">, existingComponents: StyledComponent[]) {
   let maximumSameDeclarationCount = 0
-  let mostSimilarComponent:  StyledComponent | undefined = undefined
+  let mostSimilarComponent: StyledComponent | undefined = undefined
   let mostSimilarComponentCommonStyle: CSSDeclarations = {}
   let mostSimilarComponentDifferentStyle: CSSDeclarations = {}
 
