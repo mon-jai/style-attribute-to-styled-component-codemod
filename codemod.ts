@@ -18,14 +18,24 @@ function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boo
   return true
 }
 
-function isSimilarCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
-  let sameKeyCount = 0
-  for (const key in object_1) {
-    if (!(key in object_2)) continue
-    if (object_1[key as keyof typeof object_1] === object_2[key as keyof typeof object_2]) sameKeyCount++
+function findSimilarComponent(cssObject: CSSProperties, components: StyledComponent[]) {
+  let maximumSameDeclarationCount = 0
+  let mostSimilarComponent: StyledComponent | undefined = undefined
+
+  for (const component of components) {
+    let sameKeyCount = 0
+    for (const key in cssObject) {
+      if (!(key in component.css)) continue
+      if (cssObject[key as keyof typeof cssObject] === component.css[key as keyof typeof component.css]) sameKeyCount++
+    }
+
+    if (sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT && sameKeyCount > maximumSameDeclarationCount) {
+      maximumSameDeclarationCount = sameKeyCount
+      mostSimilarComponent = component
+    }
   }
 
-  return sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT
+  return mostSimilarComponent
 }
 
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
@@ -46,7 +56,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
   let hasModifications = false
   const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
-  const styledComponentsToCreate: StyledComponentFromScratch[] = []
+  const styledComponentsFromScratch: StyledComponentFromScratch[] = []
 
   const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
@@ -71,9 +81,10 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     existingStyledComponents.push({
       name,
       css: Object.fromEntries(
-        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";").map(
-          declaration => declaration.split(":") as [string, string]
-        )
+        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
+          .map(declaration => declaration.trim())
+          .filter(declaration => declaration.includes(":"))
+          .map(declaration => declaration.split(":").map(value => value.trim()) as [string, string])
       ) as CSSProperties
     })
   })
@@ -125,32 +136,41 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     hasModifications = true
 
     let name: string
-    const componentWithSameCSS = styledComponentsToCreate.find(({ css }) => isEqualCSSObject(css, cssObject))
+    const componentWithSameCSS = styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(css, cssObject))
     if (componentWithSameCSS !== undefined) {
       name = componentWithSameCSS.name
     } else {
       for (let i = 0; ; i++) {
         name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
         if (
-          !styledComponentsToCreate.find(componentToCreate => componentToCreate.name === name) &&
+          !styledComponentsFromScratch.find(componentToCreate => componentToCreate.name === name) &&
+          !styledComponentsFromExistingComponent.find(componentToCreate => componentToCreate.name === name) &&
           !existingStyledComponentNames.includes(name)
         ) {
           break
         }
       }
 
-      let similarComponent: StyledComponent | undefined
-      for (const component of [...existingStyledComponents, ...styledComponentsToCreate]) {
-        if (isSimilarCSSObject(cssObject, component.css)) {
-          similarComponent = component
-          break
-        }
-      }
+      let similarComponent = findSimilarComponent(cssObject, [
+        ...existingStyledComponents,
+        ...styledComponentsFromScratch
+      ])
 
       if (similarComponent !== undefined) {
-        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent.name, css: cssObject })
+        const css = Object.fromEntries(
+          Object.entries(cssObject).filter(([property, value]) => {
+            if (
+              property in similarComponent!.css &&
+              similarComponent!.css[property as keyof typeof similarComponent] === value
+            ) {
+              return false
+            }
+            return true
+          })
+        )
+        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent.name, css })
       } else {
-        styledComponentsToCreate.push({ name, tagName, css: cssObject })
+        styledComponentsFromScratch.push({ name, tagName, css: cssObject })
       }
     }
 
@@ -179,7 +199,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     (source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
       ? 'import styled from "styled-components"\n'
       : "\n") +
-    styledComponentsToCreate
+    styledComponentsFromScratch
       .map(({ name, tagName, css }) => `const ${name} = styled.${tagName}\`\n${cssObjectToString(css)}\n\`\n`)
       .join("\n") +
     source.slice(lastImportEnd, exportDefaultStart) +
