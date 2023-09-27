@@ -195,7 +195,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       similarComponent !== undefined &&
       (Object.keys(differentStyle).length === 0 ||
         // If `similarComponent` is already being inherited, avoid editing it
-        styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) !==
+        styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) ===
           undefined)
     ) {
       name = newComponentName(tagName, allStyledComponents)
