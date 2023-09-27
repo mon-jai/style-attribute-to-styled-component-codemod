@@ -189,19 +189,25 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
     if (sameComponent !== undefined) {
       name = sameComponent.name
-    } else if (similarComponent !== undefined) {
+    } else if (
+      similarComponent !== undefined &&
+      // If `similarComponent` is already being inherited, avoid editing it
+      styledComponentsFromExistingComponent.find(component => component.extendedFrom === similarComponent) !== undefined
+    ) {
       name = newComponentName(tagName, allStyledComponents)
       let baseComponent
 
       if (
         // The current component's CSS is a superset of `similarComponent`'s CSS
-        Object.keys(differentStyle).length === 0 ||
-        // `similarComponent` is already being inherited, avoid making edit to it
-        styledComponentsFromExistingComponent.find(component => component.extendedFrom === similarComponent) !==
-          undefined
+        Object.keys(differentStyle).length === 0
       ) {
+        // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
+        // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
         baseComponent = similarComponent
       } else {
+        // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d } }
+        // Output = { Base: { a, b }, ComponentA: Base & { c }, ComponentB: Base & { d } }
+
         // Create a common base for the current component and `similarComponent`
         baseComponent = {
           name: newComponentName(tagName, allStyledComponents),
@@ -210,9 +216,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         }
         styledComponentsFromScratch.push(baseComponent)
 
-        styledComponentsFromScratch = styledComponentsFromScratch.filter(
-          component => component.name !== similarComponent.name
-        )
+        styledComponentsFromScratch = styledComponentsFromScratch.filter(({ name }) => name !== similarComponent.name)
         styledComponentsFromExistingComponent.push({
           ...similarComponent,
           css: differentStyle,
@@ -227,6 +231,14 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
       })
     } else {
+      // If `similarComponent` is already being inherited, nothing changes
+      // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d }, ...{ ComponentC: ComponentA & { e } } }
+      // Output = { ComponentA: { a, b, c }, ComponentB: { a, b, d }, ...{ ComponentC: ComponentA & { e } } }
+
+      // Otherwise
+      // Input = { ComponentA: { a, b, c } }
+      // Output = { ComponentA: { a, b, c } }
+
       name = newComponentName(tagName, allStyledComponents)
       styledComponentsFromScratch.push({ name, tagName, css: cssObject })
     }
