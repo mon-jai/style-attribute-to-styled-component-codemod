@@ -1,7 +1,11 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift"
 import type { CSSProperties } from "react"
 
-type StyledComponentToCreate = { componentName: string; tagName: string; css: CSSProperties }
+type StyledComponent = { name: string; css: CSSProperties }
+type StyledComponentFromExistingComponent = StyledComponent & { extendedFrom: string }
+type StyledComponentFromScratch = StyledComponent & { tagName: string }
+
+const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
 
 function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
@@ -14,10 +18,26 @@ function isEqualCSSObject(object_1: CSSProperties, object_2: CSSProperties): boo
   return true
 }
 
+function isSimilarCSSObject(object_1: CSSProperties, object_2: CSSProperties): boolean {
+  let sameKeyCount = 0
+  for (const key in object_1) {
+    if (!(key in object_2)) continue
+    if (object_1[key as keyof typeof object_1] === object_2[key as keyof typeof object_2]) sameKeyCount++
+  }
+
+  return sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT
+}
+
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
   // https://stackoverflow.com/a/273810
   const index = string.search(regex)
   return index === -1 ? lastIndex : lastIndexOfRegex(string.slice(index + 1), regex, index + 1 + lastIndex)
+}
+
+function cssObjectToString(object: CSSProperties) {
+  return Object.entries(object)
+    .map(([property, value]) => `  ${property}: ${value};`)
+    .join("\n")
 }
 
 export default function transform(file: FileInfo, api: API, _options: Options): string | void {
@@ -25,9 +45,10 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   const root = jscodeshift(file.source)
 
   let hasModifications = false
-  const styledComponentsToCreate: StyledComponentToCreate[] = []
+  const styledComponentsFromExistingComponent: StyledComponentFromExistingComponent[] = []
+  const styledComponentsToCreate: StyledComponentFromScratch[] = []
 
-  const declaredStyledComponentNames: string[] = []
+  const existingStyledComponents: StyledComponent[] = []
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
     const variableDeclarator = variableDeclaration.node.declarations.find(
       (declaration): declaration is VariableDeclarator => declaration.type === "VariableDeclarator"
@@ -46,8 +67,17 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     const id = variableDeclarator.id
     if (id.type !== "Identifier") return
 
-    declaredStyledComponentNames.push(id.name)
+    const { name } = id
+    existingStyledComponents.push({
+      name,
+      css: Object.fromEntries(
+        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";").map(
+          declaration => declaration.split(":") as [string, string]
+        )
+      ) as CSSProperties
+    })
   })
+  const existingStyledComponentNames = existingStyledComponents.map(({ name }) => name)
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
     const { openingElement, closingElement } = jsxElement.__childCache as any
@@ -94,21 +124,34 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
     hasModifications = true
 
-    let componentName: string
+    let name: string
     const componentWithSameCSS = styledComponentsToCreate.find(({ css }) => isEqualCSSObject(css, cssObject))
     if (componentWithSameCSS !== undefined) {
-      componentName = componentWithSameCSS.componentName
+      name = componentWithSameCSS.name
     } else {
       for (let i = 0; ; i++) {
-        componentName = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+        name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
         if (
-          !styledComponentsToCreate.find(componentToCreate => componentToCreate.componentName === componentName) &&
-          !declaredStyledComponentNames.includes(componentName)
+          !styledComponentsToCreate.find(componentToCreate => componentToCreate.name === name) &&
+          !existingStyledComponentNames.includes(name)
         ) {
           break
         }
       }
-      styledComponentsToCreate.push({ componentName, tagName, css: cssObject })
+
+      let similarComponent: StyledComponent | undefined
+      for (const component of [...existingStyledComponents, ...styledComponentsToCreate]) {
+        if (isSimilarCSSObject(cssObject, component.css)) {
+          similarComponent = component
+          break
+        }
+      }
+
+      if (similarComponent !== undefined) {
+        styledComponentsFromExistingComponent.push({ name, extendedFrom: similarComponent.name, css: cssObject })
+      } else {
+        styledComponentsToCreate.push({ name, tagName, css: cssObject })
+      }
     }
 
     // Delete styleAttribute if there is no property left
@@ -117,8 +160,8 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     }
 
     // Replace element with a styled component
-    openingElement.value.name.name = componentName
-    if (closingElement.value !== null) closingElement.value.name.name = componentName
+    openingElement.value.name.name = name
+    if (closingElement.value !== null) closingElement.value.name.name = name
   })
 
   if (!hasModifications) return
@@ -128,20 +171,23 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   const lastImportStart = lastIndexOfRegex(source, /^import\s[A-Za-z0-9\{\},\s]+ from/m)
   const lastImportEnd = lastImportStart === -1 ? 0 : lastImportStart + source.slice(lastImportStart).indexOf("\n")
 
+  const exportDefaultStart = lastIndexOfRegex(source, /export default/) - 1
+
   return (
     source.slice(0, lastImportEnd) +
-    [
-      // Add import statement if styled isn't imported
-      source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
-        ? 'import styled from "styled-components"\n'
-        : "\n",
-      ...styledComponentsToCreate.map(({ componentName, tagName, css }) => {
-        const cssString = Object.entries(css)
-          .map(([property, value]) => `  ${property}: ${value};`)
-          .join("\n")
-        return `const ${componentName} = styled.${tagName}\`\n${cssString}\n\`\n`
-      })
-    ].join("\n") +
-    source.slice(lastImportEnd)
+    // Add import statement if styled isn't imported
+    (source.search(/import.*styled.*from\s+['"]styled-components['"]/m) === -1
+      ? 'import styled from "styled-components"\n'
+      : "\n") +
+    styledComponentsToCreate
+      .map(({ name, tagName, css }) => `const ${name} = styled.${tagName}\`\n${cssObjectToString(css)}\n\`\n`)
+      .join("\n") +
+    source.slice(lastImportEnd, exportDefaultStart) +
+    styledComponentsFromExistingComponent
+      .map(
+        ({ name, extendedFrom, css }) => `const ${name} = styled(${extendedFrom})\`\n${cssObjectToString(css)}\n\`\n`
+      )
+      .join("\n") +
+    source.slice(exportDefaultStart)
   )
 }
