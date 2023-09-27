@@ -165,7 +165,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
         (match: string) => `-${match.toLowerCase()}`
       )
       const cssValue = value.value as CSSDeclarations[keyof CSSDeclarations]
-
       cssObject[cssProperty] = cssValue
     }
     if (Object.keys(cssObject).length === 0) return
@@ -179,13 +178,13 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       ...styledComponentsFromExistingComponent
     ]
 
-    const componentWithSameCSS =
+    const componentWithTheSameCSS =
       styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(cssObject, css)) ??
       styledComponentsFromExistingComponent.find(({ css, extendedFrom }) =>
         isEqualCSSObject(cssObject, { ...extendedFrom.css, ...css })
       )
-    if (componentWithSameCSS !== undefined) {
-      name = componentWithSameCSS.name
+    if (componentWithTheSameCSS !== undefined) {
+      name = componentWithTheSameCSS.name
     } else {
       name = newComponentName(tagName, allStyledComponents)
 
@@ -208,14 +207,15 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
           }
           styledComponentsFromScratch.push(baseComponent)
 
-          const similarComponentExtended = similarComponent as StyledComponentFromExistingComponent
-          similarComponentExtended.css = differentStyle
-          similarComponentExtended.extendedFrom = baseComponent
-
           styledComponentsFromScratch = styledComponentsFromScratch.filter(
             component => component.name !== similarComponent!.name
           )
-          styledComponentsFromExistingComponent.push(similarComponentExtended)
+
+          styledComponentsFromExistingComponent.push({
+            ...similarComponent,
+            css: differentStyle,
+            extendedFrom: baseComponent
+          })
         } else {
           // The current component's style is a superset of similarComponent's style
           baseComponent = similarComponent
