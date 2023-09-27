@@ -177,61 +177,58 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       ...styledComponentsFromScratch,
       ...styledComponentsFromExistingComponent
     ]
-
-    const componentWithTheSameCSS =
+    const sameComponent =
       styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(cssObject, css)) ??
       styledComponentsFromExistingComponent.find(({ css, extendedFrom }) =>
         isEqualCSSObject(cssObject, { ...extendedFrom.css, ...css })
       )
-    if (componentWithTheSameCSS !== undefined) {
-      name = componentWithTheSameCSS.name
-    } else {
+    const { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
+      { tagName, css: cssObject },
+      [
+        ...existingStyledComponents.filter(component => component.tagName !== "ExtendedComponent"),
+        ...styledComponentsFromScratch
+      ].filter(({ name }) => !baseComponentNames.includes(name))
+    )
+
+    if (sameComponent !== undefined) {
+      name = sameComponent.name
+    } else if (similarComponent !== undefined) {
       name = newComponentName(tagName, allStyledComponents)
+      let baseComponent
 
-      const { similarComponent, commonStyle, differentStyle } = findSimilarComponent(
-        { tagName, css: cssObject },
-        [
-          ...existingStyledComponents.filter(component => component.tagName !== "ExtendedComponent"),
-          ...styledComponentsFromScratch
-        ].filter(({ name }) => !baseComponentNames.includes(name))
-      )
-
-      if (typeof similarComponent !== "undefined") {
-        let baseComponent
-
-        if (Object.keys(differentStyle).length > 0) {
-          baseComponent = {
-            name: newComponentName(tagName, allStyledComponents),
-            tagName,
-            css: commonStyle
-          }
-          styledComponentsFromScratch.push(baseComponent)
-
-          styledComponentsFromScratch = styledComponentsFromScratch.filter(
-            component => component.name !== similarComponent!.name
-          )
-
-          styledComponentsFromExistingComponent.push({
-            ...similarComponent,
-            css: differentStyle,
-            extendedFrom: baseComponent
-          })
-        } else {
-          // The current component's style is a superset of similarComponent's style
-          baseComponent = similarComponent
+      if (Object.keys(differentStyle).length > 0) {
+        baseComponent = {
+          name: newComponentName(tagName, allStyledComponents),
+          tagName,
+          css: commonStyle
         }
+        styledComponentsFromScratch.push(baseComponent)
 
-        baseComponentNames.push(baseComponent.name)
+        styledComponentsFromScratch = styledComponentsFromScratch.filter(
+          component => component.name !== similarComponent!.name
+        )
 
         styledComponentsFromExistingComponent.push({
-          name,
-          tagName,
-          extendedFrom: baseComponent,
-          css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
+          ...similarComponent,
+          css: differentStyle,
+          extendedFrom: baseComponent
         })
       } else {
-        styledComponentsFromScratch.push({ name, tagName, css: cssObject })
+        // The current component's style is a superset of similarComponent's style
+        baseComponent = similarComponent
       }
+
+      baseComponentNames.push(baseComponent.name)
+
+      styledComponentsFromExistingComponent.push({
+        name,
+        tagName,
+        extendedFrom: baseComponent,
+        css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
+      })
+    } else {
+      name = newComponentName(tagName, allStyledComponents)
+      styledComponentsFromScratch.push({ name, tagName, css: cssObject })
     }
 
     // Delete styleAttribute if there is no property left
