@@ -191,50 +191,47 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, c } }
       // Output = { ComponentA: { a, b, c } }
       name = sameComponent.name
+    } else if (similarComponent !== undefined && Object.keys(differentStyle).length === 0) {
+      // The current component's CSS is a superset of `similarComponent`'s CSS
+      // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
+      // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
+      name = newComponentName(tagName, allStyledComponents)
+      styledComponentsFromExistingComponent.push({
+        name,
+        tagName,
+        extendedFrom: similarComponent,
+        css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
+      })
     } else if (
       similarComponent !== undefined &&
-      (Object.keys(differentStyle).length === 0 ||
-        // If `similarComponent` is already being inherited, avoid editing it
-        styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) ===
-          undefined)
+      // If `similarComponent` is already being inherited, avoid editing it
+      styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) === undefined
     ) {
+      // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d } }
+      // Output = { Base: { a, b }, ComponentA: Base & { c }, ComponentB: Base & { d } }
+
       name = newComponentName(tagName, allStyledComponents)
-      let baseComponent
 
-      if (Object.keys(differentStyle).length === 0) {
-        // The current component's CSS is a superset of `similarComponent`'s CSS
-        // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
-        // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
-        baseComponent = similarComponent
-      } else {
-        // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d } }
-        // Output = { Base: { a, b }, ComponentA: Base & { c }, ComponentB: Base & { d } }
-
-        // Create a common base for the current component and `similarComponent`
-        baseComponent = {
-          name: newComponentName(tagName, allStyledComponents),
-          tagName,
-          css: commonStyle
-        }
-        // Push Base
-        styledComponentsFromScratch.push(baseComponent)
-
-        // Push ComponentA
-        styledComponentsFromScratch = styledComponentsFromScratch.filter(({ name }) => name !== similarComponent.name)
-        styledComponentsFromExistingComponent.push({
-          ...similarComponent,
-          css: differentStyle,
-          extendedFrom: baseComponent
-        })
+      // Create a common base for the current component and `similarComponent`
+      const baseComponent = {
+        name: newComponentName(tagName, allStyledComponents),
+        tagName,
+        css: commonStyle
       }
-
-      // Push ComponentB
-      styledComponentsFromExistingComponent.push({
+      const ComponentA = { ...similarComponent, extendedFrom: baseComponent, css: differentStyle }
+      const ComponentB = {
         name,
         tagName,
         extendedFrom: baseComponent,
         css: Object.fromEntries(Object.entries(cssObject).filter(([property]) => !(property in commonStyle)))
-      })
+      }
+
+      // Remove `similarComponent` from `styledComponentsFromScratch`
+      styledComponentsFromScratch = styledComponentsFromScratch.filter(({ name }) => name !== similarComponent.name)
+
+      styledComponentsFromScratch.push(baseComponent)
+      styledComponentsFromExistingComponent.push(ComponentA)
+      styledComponentsFromExistingComponent.push(ComponentB)
     } else {
       // If `similarComponent` is already being inherited, nothing changes
       // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, d }, ...{ ComponentC: ComponentA & { e } } }
@@ -243,6 +240,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       // Otherwise, the component is unique
       // Input = { ComponentA: { a, b, c } }
       // Output = { ComponentA: { a, b, c } }
+
       name = newComponentName(tagName, allStyledComponents)
       styledComponentsFromScratch.push({ name, tagName, css: cssObject })
     }
