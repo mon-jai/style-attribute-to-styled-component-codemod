@@ -1,12 +1,8 @@
 import type { API, FileInfo, JSXAttribute, Node, Options, Property, VariableDeclarator } from "jscodeshift"
 
 type CSSDeclarations = { [key: string]: string | number }
-
 type StyledComponent = { name: string; tagName: string; css: CSSDeclarations }
-
-type StyledComponentExtendedFromOtherComponent = StyledComponent & {
-  extendedFrom: StyledComponentExtendedFromOtherComponent | StyledComponent
-}
+type StyledComponentExtendedFromOtherComponent = StyledComponent & { extendedFrom: StyledComponent }
 
 const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
 
