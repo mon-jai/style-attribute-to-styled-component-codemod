@@ -171,7 +171,6 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
     hasModifications = true
 
-    let name: string
     const allStyledComponents = [
       ...existingStyledComponents,
       ...styledComponentsFromScratch,
@@ -187,13 +186,9 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
       allStyledComponents.filter(component => component.tagName !== "ExtendedComponent")
     )
 
-    if (sameComponent !== undefined) {
-      // Input = { ComponentA: { a, b, c }, ComponentB: { a, b, c } }
-      // Output = { ComponentA: { a, b, c } }
-      name = sameComponent.name
-    } else {
-      name = newComponentName(tagName, allStyledComponents)
+    const name = sameComponent !== undefined ? sameComponent.name : newComponentName(tagName, allStyledComponents)
 
+    if (sameComponent !== undefined) {
       // The current component's CSS is a superset of `similarComponent`'s CSS
       // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
       // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
