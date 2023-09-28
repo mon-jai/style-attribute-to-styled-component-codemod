@@ -188,7 +188,7 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
 
     const name = sameComponent !== undefined ? sameComponent.name : newComponentName(tagName, allStyledComponents)
 
-    if (sameComponent !== undefined) {
+    if (sameComponent === undefined) {
       // The current component's CSS is a superset of `similarComponent`'s CSS
       // Input = { ComponentA: { a, b }, ComponentB: { a, b, c } }
       // Output = { ComponentA: { a, b }, ComponentB: ComponentA & { c } }
