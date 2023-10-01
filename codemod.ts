@@ -40,7 +40,6 @@ function findSimilarComponent(
 
   for (const existingComponent of existingComponents) {
     if (component.tagName !== existingComponent.tagName) continue
-    if (!Object.keys(existingComponent.css).every(property => property in component.css)) continue
 
     let sameKeyCount = 0
     const commonStyle: CSSDeclarations = {}
