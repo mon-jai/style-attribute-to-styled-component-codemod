@@ -191,19 +191,24 @@ function categorizeComponent(
       styledComponentsFromExistingComponent.push(currentComponent)
       return name
     } else if (!isSimilarComponentBeingInherited) {
+      // Create a common base for the current component and `similarComponent`
+      const baseComponent = { name: generateNewComponentName(tagName, allStyledComponents), tagName, css: commonStyle }
+      styledComponentsFromScratch.push(baseComponent)
+
+      // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b } }
+      // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base }
+      if (Object.keys(currentComponentOnlyStyle).length === 0) return baseComponent.name
+
       // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b, d } }
       // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base & { d } }
 
       const name = generateNewComponentName(tagName, allStyledComponents)
       const similarComponentIndex = styledComponentsFromScratch.findIndex(({ name }) => name === similarComponent.name)
 
-      // Create a common base for the current component and `similarComponent`
-      const baseComponent = { name: generateNewComponentName(tagName, allStyledComponents), tagName, css: commonStyle }
       const newSimilarComponent = { ...similarComponent, extendedFrom: baseComponent, css: similarComponentOnlyStyle }
       const currentComponent = { name, tagName, extendedFrom: baseComponent, css: currentComponentOnlyStyle }
 
       styledComponentsFromScratch.splice(similarComponentIndex, 1) // Remove `similarComponent` from `styledComponentsFromScratch`
-      styledComponentsFromScratch.push(baseComponent)
       styledComponentsFromExistingComponent.push(newSimilarComponent)
       styledComponentsFromExistingComponent.push(currentComponent)
       return name
