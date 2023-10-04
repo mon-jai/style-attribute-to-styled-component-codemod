@@ -112,6 +112,10 @@ function findSimilarComponent(
     let sameKeyCount = 0
     const commonStyle: CSSDeclarations = {}
     const similarComponentOnlyStyle: CSSDeclarations = {}
+    const isExistingComponentBeingInherited =
+      existingComponents.find(
+        component => "extendedFrom" in component && component.extendedFrom === existingComponent
+      ) !== undefined
 
     for (const property in existingComponent.css) {
       const value = existingComponent.css[property as keyof typeof existingComponent.css]!
@@ -123,7 +127,11 @@ function findSimilarComponent(
       }
     }
 
-    if (sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT && sameKeyCount > maximumSameDeclarationCount) {
+    if (
+      (Object.keys(similarComponentOnlyStyle).length === 0 || !isExistingComponentBeingInherited) &&
+      sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT &&
+      sameKeyCount > maximumSameDeclarationCount
+    ) {
       maximumSameDeclarationCount = sameKeyCount
       mostSimilarComponent = existingComponent
       mostSimilarComponentCommonStyle = commonStyle
@@ -145,10 +153,6 @@ function generateNewComponentName(tagName: string, existingComponents: { name: s
   for (let i = 0; ; i++) {
     const name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
     if (existingComponents.find(component => component.name === name)) continue
-
-    // Add a placeholder for the returned name
-    existingComponents.push({ name })
-
     return name
   }
 }
@@ -176,57 +180,54 @@ function categorizeComponent(
     { tagName, css: cssObject },
     allStyledComponents.filter(component => component.tagName !== "ExtendedComponent")
   )
-  const isSimilarComponentBeingInherited =
-    styledComponentsFromExistingComponent.find(({ extendedFrom }) => extendedFrom === similarComponent) !== undefined
 
-  if (similarComponent !== undefined) {
-    if (Object.keys(similarComponentOnlyStyle).length === 0) {
-      // The current component's CSS is a superset of `similarComponent`'s CSS
-      // Input = { SimilarComponent: { a, b }, CurrentComponent: { a, b, c } }
-      // Output = { SimilarComponent: { a, b }, CurrentComponent: SimilarComponent & { c } }
-
-      const name = generateNewComponentName(tagName, allStyledComponents)
-      const currentComponent = { name, tagName, extendedFrom: similarComponent, css: currentComponentOnlyStyle }
-
-      styledComponentsFromExistingComponent.push(currentComponent)
-      return name
-    } else if (!isSimilarComponentBeingInherited) {
-      // Create a common base for the current component and `similarComponent`
-      const baseComponent = { name: generateNewComponentName(tagName, allStyledComponents), tagName, css: commonStyle }
-      styledComponentsFromScratch.push(baseComponent)
-
-      // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b } }
-      // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base }
-      if (Object.keys(currentComponentOnlyStyle).length === 0) return baseComponent.name
-
-      // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b, d } }
-      // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base & { d } }
-
-      const name = generateNewComponentName(tagName, allStyledComponents)
-      const similarComponentIndex = styledComponentsFromScratch.findIndex(({ name }) => name === similarComponent.name)
-
-      const newSimilarComponent = { ...similarComponent, extendedFrom: baseComponent, css: similarComponentOnlyStyle }
-      const currentComponent = { name, tagName, extendedFrom: baseComponent, css: currentComponentOnlyStyle }
-
-      styledComponentsFromScratch.splice(similarComponentIndex, 1) // Remove `similarComponent` from `styledComponentsFromScratch`
-      styledComponentsFromExistingComponent.push(newSimilarComponent)
-      styledComponentsFromExistingComponent.push(currentComponent)
-      return name
-    }
+  if (similarComponent === undefined) {
+    // The component is unique
+    // Input = { CurrentComponent: { a, b, c } }
+    // Output = { CurrentComponent: { a, b, c } }
+    const currentComponent = { name: generateNewComponentName(tagName, allStyledComponents), tagName, css: cssObject }
+    styledComponentsFromScratch.push(currentComponent)
+    return currentComponent.name
   }
 
-  // If `similarComponent` is already being inherited, nothing changes
-  // Input = { SimilarComponent: { a, b, c }, SomeComponent: SimilarComponent & { d }, CurrentComponent: { a, b, e } }
-  // Output = { SimilarComponent: { a, b, c }, SomeComponent: SimilarComponent & { d }, CurrentComponent: { a, b, e } }
+  if (Object.keys(similarComponentOnlyStyle).length === 0) {
+    // The current component's CSS is a superset of `similarComponent`'s CSS
+    // Input = { SimilarComponent: { a, b }, CurrentComponent: { a, b, c } }
+    // Output = { SimilarComponent: { a, b }, CurrentComponent: SimilarComponent & { c } }
+    const currentComponent = {
+      name: generateNewComponentName(tagName, allStyledComponents),
+      tagName,
+      extendedFrom: similarComponent,
+      css: currentComponentOnlyStyle
+    }
+    styledComponentsFromExistingComponent.push(currentComponent)
+    return currentComponent.name
+  }
 
-  // Otherwise, the component is unique
-  // Input = { CurrentComponent: { a, b, c } }
-  // Output = { CurrentComponent: { a, b, c } }
+  const baseComponent = { name: generateNewComponentName(tagName, allStyledComponents), tagName, css: commonStyle }
+  const newSimilarComponent = { ...similarComponent, extendedFrom: baseComponent, css: similarComponentOnlyStyle }
+  const similarComponentIndex = styledComponentsFromScratch.findIndex(({ name }) => name === similarComponent.name)
 
-  const name = generateNewComponentName(tagName, allStyledComponents)
+  allStyledComponents.push(baseComponent)
+  allStyledComponents.push(newSimilarComponent)
+  styledComponentsFromScratch.splice(similarComponentIndex, 1) // Remove `similarComponent` from `styledComponentsFromScratch`
+  styledComponentsFromScratch.push(baseComponent)
+  styledComponentsFromExistingComponent.push(newSimilarComponent)
 
-  styledComponentsFromScratch.push({ name, tagName, css: cssObject })
-  return name
+  // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b } }
+  // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base }
+  if (Object.keys(currentComponentOnlyStyle).length === 0) return baseComponent.name
+
+  // Input = { SimilarComponent: { a, b, c }, CurrentComponent: { a, b, d } }
+  // Output = { Base: { a, b }, SimilarComponent: Base & { c }, CurrentComponent: Base & { d } }
+  const currentComponent = {
+    name: generateNewComponentName(tagName, allStyledComponents),
+    tagName,
+    extendedFrom: baseComponent,
+    css: currentComponentOnlyStyle
+  }
+  styledComponentsFromExistingComponent.push(currentComponent)
+  return currentComponent.name
 }
 
 function lastIndexOfRegex(string: string, regex: RegExp, lastIndex = -1): number {
