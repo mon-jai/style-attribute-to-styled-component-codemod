@@ -251,26 +251,30 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
   const styledComponentsFromExistingComponent: StyledComponentExtendedFromOtherComponent[] = []
 
   root.find(jscodeshift.JSXElement).forEach(jsxElement => {
-    const { openingElement, closingElement } = jsxElement.__childCache as any
-    const attributes = openingElement.node.attributes
+    const { openingElement, closingElement } = jsxElement.node
+    const attributes = openingElement.attributes
+    if (attributes === undefined) return
 
-    const tagName = openingElement.value.name.name
+    const tagName = "name" in openingElement.name ? (openingElement.name.name as string) : undefined
     if (tagName === undefined) return
     if (tagName.charAt(0).match(/[A-Z]/)) return
 
-    const styleAttributeIndex = attributes.findIndex((attribute: JSXAttribute) => attribute?.name?.name === "style")
+    const styleAttributeIndex = attributes?.findIndex(
+      attribute => "name" in attribute && attribute.name?.name === "style"
+    )
     if (styleAttributeIndex === -1) return
 
-    const styleAttribute = attributes[styleAttributeIndex]
+    const styleAttribute = attributes[styleAttributeIndex] as JSXAttribute
+    if (!styleAttribute.value || !("expression" in styleAttribute.value)) return
     if (styleAttribute.value.expression?.type !== "ObjectExpression") return
 
-    const cssObject = extractCSSObject(styleAttribute)
+    const cssObject = extractCSSObject(styleAttribute as { value: { expression: ObjectExpression } })
     if (Object.keys(cssObject).length === 0) return
 
     hasModifications = true
 
     // Delete styleAttribute if there is no property left
-    if (styleAttribute.value.expression.properties.every((property: Property | undefined) => property === undefined)) {
+    if (styleAttribute.value.expression.properties.every(property => property === undefined)) {
       delete attributes[styleAttributeIndex]
     }
 
@@ -283,8 +287,10 @@ export default function transform(file: FileInfo, api: API, _options: Options): 
     )
 
     // Replace element with a styled component
-    openingElement.value.name.name = componentName
-    if (closingElement.value !== null) closingElement.value.name.name = componentName
+    if (!("name" in openingElement.name)) return
+    openingElement.name.name = componentName
+    if (closingElement?.name.type !== "JSXIdentifier") return
+    closingElement.name.name = componentName
   })
 
   if (!hasModifications) return
