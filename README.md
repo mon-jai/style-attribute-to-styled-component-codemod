@@ -15,7 +15,7 @@ npm install -g jscodeshift
 To migrate all `jsx` files within the `src` directory:
 
 ```sh
-jscodeshift -t /path/to/codemod.ts src/**/*.jsx [--similar-components-minimum-common-declarations COUNT]
+jscodeshift src/**/*.jsx [--similar-components-minimum-common-declarations COUNT] -t https://raw.githubusercontent.com/mon-jai/style-attribute-to-styled-component-codemod/main/codemod.ts 
 
 --similar-components-minimum-common-declarations
   Specifies the minimum number of common declarations required to determine whether components should be extended from a common base.
