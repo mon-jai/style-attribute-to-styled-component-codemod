@@ -15,7 +15,7 @@ type CSSDeclarations = { [key: string]: string | number }
 type StyledComponent = { name: string; tagName: string; css: CSSDeclarations }
 type StyledComponentInheritingOtherComponent = StyledComponent & { extendedFrom: StyledComponent }
 
-const SIMILAR_CSS_OBJECT_KEY_COUNT = 5
+let SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS: number
 
 function isEqualCSSObject(object_1: CSSDeclarations, object_2: CSSDeclarations): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
@@ -129,7 +129,7 @@ function findSimilarComponent(
 
     if (
       (Object.keys(similarComponentOnlyStyle).length === 0 || !isExistingComponentBeingInherited) &&
-      sameKeyCount >= SIMILAR_CSS_OBJECT_KEY_COUNT &&
+      sameKeyCount >= SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS &&
       sameKeyCount > maximumSameDeclarationCount
     ) {
       maximumSameDeclarationCount = sameKeyCount
@@ -242,9 +242,11 @@ function cssObjectToString(object: CSSDeclarations) {
     .join("\n")
 }
 
-export default function transform(file: FileInfo, api: API, _options: Options): string | void {
+export default function transform(file: FileInfo, api: API, options: Options): string | void {
   const { jscodeshift } = api
   const root = jscodeshift(file.source)
+
+  SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS = options["similar-components-minimum-common-declarations"] ?? 5
 
   let hasModifications = false
   const existingStyledComponents = findExistingStyledComponents(root, jscodeshift)
