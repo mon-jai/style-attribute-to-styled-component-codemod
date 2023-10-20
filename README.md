@@ -25,7 +25,6 @@ You should reformat your code after running the codemod.
 
 ## Known Limitations
 
-- Style objects declared with the spread operator are not supported.
 - Dynamically computed CSS properties and values are skipped.
 
 ## License
