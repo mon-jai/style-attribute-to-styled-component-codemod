@@ -17,7 +17,9 @@ type StyledComponentInheritingOtherComponent = StyledComponent & { extendedFrom:
 
 let SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS: number
 
-function isEqualCSSObject(object_1: CSSDeclarations, object_2: CSSDeclarations): boolean {
+// Utility functions
+
+function isEqualCssObject(object_1: CSSDeclarations, object_2: CSSDeclarations): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
 
   for (const key in object_1) {
@@ -26,75 +28,6 @@ function isEqualCSSObject(object_1: CSSDeclarations, object_2: CSSDeclarations):
   }
 
   return true
-}
-
-function findExistingStyledComponents(root: Collection<any>, jscodeshift: JSCodeshift) {
-  const existingStyledComponents: StyledComponent[] = []
-
-  root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
-    const variableDeclarator = variableDeclaration.node.declarations.find(
-      (declaration): declaration is VariableDeclarator => declaration.type === "VariableDeclarator"
-    )
-    if (variableDeclarator === undefined) return
-
-    if (
-      variableDeclarator.init?.type !== "TaggedTemplateExpression" ||
-      variableDeclarator.init.tag.type !== "MemberExpression" ||
-      variableDeclarator.init.tag.object.type !== "Identifier" ||
-      variableDeclarator.init.tag.object.name !== "styled"
-    ) {
-      return
-    }
-
-    const id = variableDeclarator.id
-    if (id.type !== "Identifier") return
-
-    const { name } = id
-    existingStyledComponents.push({
-      name,
-      tagName:
-        variableDeclarator.init.tag.property.type === "Identifier"
-          ? variableDeclarator.init.tag.property.name
-          : "ExtendedComponent",
-      css: Object.fromEntries(
-        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
-          .map(declaration => declaration.trim())
-          .filter(declaration => declaration.includes(":"))
-          .map(declaration => declaration.split(":").map(value => value.trim()))
-      )
-    })
-  })
-
-  return existingStyledComponents
-}
-
-function extractCSSObject(styleAttribute: { value: { expression: ObjectExpression } }) {
-  const cssObject: CSSDeclarations = {}
-
-  for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
-    const property: Node = styleAttribute.value.expression.properties[i]!
-    if (property.type !== "Property") continue
-
-    const { key, value } = property as Property
-    // Identifier key: { color: red }
-    // Literal key: { "color": red }
-    if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") {
-      // Style attribute with JavaScript code needed too be rewritten manually.
-      continue
-    }
-
-    delete styleAttribute.value.expression.properties[i]
-    if (value.value === "") continue
-
-    const cssProperty = (key.type === "Identifier" ? key.name : (key.value as string)).replaceAll(
-      /[A-Z]/g,
-      (match: string) => `-${match.toLowerCase()}`
-    )
-    const cssValue = value.value as CSSDeclarations[keyof CSSDeclarations]
-    cssObject[cssProperty] = cssValue
-  }
-
-  return cssObject
 }
 
 function findSimilarComponent(
@@ -157,6 +90,74 @@ function generateNewComponentName(tagName: string, existingComponents: { name: s
   }
 }
 
+// Functions called by `transform`
+
+function findExistingStyledComponents(root: Collection<any>, jscodeshift: JSCodeshift) {
+  const existingStyledComponents: StyledComponent[] = []
+
+  root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
+    const variableDeclarator = variableDeclaration.node.declarations.find(
+      (declaration): declaration is VariableDeclarator => declaration.type === "VariableDeclarator"
+    )
+    if (variableDeclarator === undefined) return
+
+    if (
+      variableDeclarator.init?.type !== "TaggedTemplateExpression" ||
+      variableDeclarator.init.tag.type !== "MemberExpression" ||
+      variableDeclarator.init.tag.object.type !== "Identifier" ||
+      variableDeclarator.init.tag.object.name !== "styled"
+    ) {
+      return
+    }
+
+    const id = variableDeclarator.id
+    if (id.type !== "Identifier") return
+
+    const { name } = id
+    existingStyledComponents.push({
+      name,
+      tagName:
+        variableDeclarator.init.tag.property.type === "Identifier"
+          ? variableDeclarator.init.tag.property.name
+          : "ExtendedComponent",
+      css: Object.fromEntries(
+        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
+          .map(declaration => declaration.trim())
+          .filter(declaration => declaration.includes(":"))
+          .map(declaration => declaration.split(":").map(value => value.trim()))
+      )
+    })
+  })
+
+  return existingStyledComponents
+}
+
+function extractCssObject(styleAttribute: { value: { expression: ObjectExpression } }) {
+  const cssObject: CSSDeclarations = {}
+
+  for (let i = 0; i < styleAttribute.value.expression.properties.length; i++) {
+    const property: Node = styleAttribute.value.expression.properties[i]!
+    if (property.type !== "Property") continue
+
+    const { key, value } = property as Property
+    // `Identifier` key: { color: red }, `Literal` key: { "color": red }
+    // Dynamically computed CSS properties and values needed too be rewritten manually.
+    if ((key.type !== "Identifier" && key.type !== "Literal") || value.type !== "Literal") continue
+
+    delete styleAttribute.value.expression.properties[i]
+    if (value.value === "") continue
+
+    const cssProperty = (key.type === "Identifier" ? key.name : (key.value as string)).replaceAll(
+      /[A-Z]/g,
+      (match: string) => `-${match.toLowerCase()}`
+    )
+    const cssValue = value.value as CSSDeclarations[keyof CSSDeclarations]
+    cssObject[cssProperty] = cssValue
+  }
+
+  return cssObject
+}
+
 function categorizeComponent(
   tagName: string,
   cssObject: CSSDeclarations,
@@ -165,9 +166,9 @@ function categorizeComponent(
   styledComponentsInheritingOtherComponents: StyledComponentInheritingOtherComponent[]
 ) {
   const sameComponent =
-    styledComponentsFromScratch.find(({ css }) => isEqualCSSObject(cssObject, css)) ??
+    styledComponentsFromScratch.find(({ css }) => isEqualCssObject(cssObject, css)) ??
     styledComponentsInheritingOtherComponents.find(({ css, extendedFrom }) =>
-      isEqualCSSObject(cssObject, { ...extendedFrom.css, ...css })
+      isEqualCssObject(cssObject, { ...extendedFrom.css, ...css })
     )
   if (sameComponent !== undefined) return sameComponent.name
 
@@ -209,7 +210,6 @@ function categorizeComponent(
   const similarComponentIndex = styledComponentsFromScratch.findIndex(({ name }) => name === similarComponent.name)
 
   allStyledComponents.push(baseComponent)
-  allStyledComponents.push(newSimilarComponent)
   styledComponentsFromScratch.splice(similarComponentIndex, 1) // Remove `similarComponent` from `styledComponentsFromScratch`
   styledComponentsFromScratch.push(baseComponent)
   styledComponentsInheritingOtherComponents.push(newSimilarComponent)
@@ -262,16 +262,16 @@ export default function transform(file: FileInfo, api: API, options: Options): s
     if (tagName === undefined) return
     if (tagName.charAt(0).match(/[A-Z]/)) return
 
-    const styleAttributeIndex = attributes?.findIndex(
-      attribute => "name" in attribute && attribute.name?.name === "style"
+    const styleAttributeIndex = attributes.findIndex(
+      attribute => "name" in attribute && attribute.name.name === "style"
     )
     if (styleAttributeIndex === -1) return
 
     const styleAttribute = attributes[styleAttributeIndex] as JSXAttribute
-    if (!styleAttribute.value || !("expression" in styleAttribute.value)) return
-    if (styleAttribute.value.expression?.type !== "ObjectExpression") return
+    if (styleAttribute.value?.type !== "JSXExpressionContainer") return
+    if (styleAttribute.value.expression.type !== "ObjectExpression") return
 
-    const cssObject = extractCSSObject(styleAttribute as { value: { expression: ObjectExpression } })
+    const cssObject = extractCssObject(styleAttribute as { value: { expression: ObjectExpression } })
     if (Object.keys(cssObject).length === 0) return
 
     hasModifications = true
