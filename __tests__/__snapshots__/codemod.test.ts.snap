@@ -4,16 +4,18 @@ exports[`components inheritance being parsed correctly 1`] = `
 "import styled from "styled-components"
 
 
+// Should not be picked as \`similarComponent\`
 const Div0 = styled.div\`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex-direction: column;
+  common-property1: value-1;
+  common-property2: value-2;
+  common-property3: value-3;
+  common-property4: value-4;
+  common-property5: value-5;
 \`
 
+// Closest, should be picked as \`similarComponent\`
 const Div1 = styled(Div0)\`
-  flex-grow: 1;
+  common-property6: value-6;
 \`
 
 export default function Component() {
@@ -29,20 +31,20 @@ export default function Component() {
 exports[`unnamed components should be updated if appropriate 1`] = `
 "import styled from "styled-components"
 const Div1 = styled.div\`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex-direction: column;
+  common-property1: value-1;
+  common-property2: value-2;
+  common-property3: value-3;
+  common-property4: value-4;
+  common-property5: value-5;
 \`
 
 
 const Div0 = styled(Div1)\`
-  flex-shrink: 1;
+  different-property2: value-2;
 \`
 
 const Div2 = styled(Div1)\`
-  flex-grow: 1;
+  different-property1: value-1;
 \`
 
 export default function Component() {
@@ -58,22 +60,23 @@ export default function Component() {
 exports[`user-named components should not be overwritten 1`] = `
 "import styled from "styled-components"
 const Div0 = styled.div\`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex-direction: column;
-  flex-grow: 1;
+  common-property1: value-1;
+  common-property2: value-2;
+  common-property3: value-3;
+  common-property4: value-4;
+  common-property5: value-5;
+  different-property1: value-1;
 \`
 
 
+// Should not be modified
 const Foo = styled.div\`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex-direction: column;
-  flex-shrink: 1;
+  common-property1: value-1;
+  common-property2: value-2;
+  common-property3: value-3;
+  common-property4: value-4;
+  common-property5: value-5;
+  different-property2: value-2;
 \`
 
 export default function Component() {

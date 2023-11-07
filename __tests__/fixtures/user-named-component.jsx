@@ -1,12 +1,13 @@
 import styled from "styled-components"
 
+// Should not be modified
 const Foo = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  flex-direction: column;
-  flex-shrink: 1;
+  common-property1: value-1;
+  common-property2: value-2;
+  common-property3: value-3;
+  common-property4: value-4;
+  common-property5: value-5;
+  different-property2: value-2;
 `
 
 export default function Component() {
@@ -14,12 +15,12 @@ export default function Component() {
     <Foo>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexWrap: "wrap",
-          flexDirection: "column",
-          flexGrow: 1
+          commonProperty1: "value-1",
+          commonProperty2: "value-2",
+          commonProperty3: "value-3",
+          commonProperty4: "value-4",
+          commonProperty5: "value-5",
+          differentProperty1: "value-1"
         }}
       />
     </Foo>
