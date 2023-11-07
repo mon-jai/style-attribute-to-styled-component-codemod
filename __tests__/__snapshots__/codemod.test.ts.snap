@@ -1,0 +1,87 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`components inheritance being parsed correctly 1`] = `
+"import styled from "styled-components"
+
+
+const Div0 = styled.div\`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex-direction: column;
+\`
+
+const Div1 = styled(Div0)\`
+  flex-grow: 1;
+\`
+
+export default function Component() {
+  return (
+    (<Div1>
+      <Div1 />
+    </Div1>)
+  );
+}
+"
+`;
+
+exports[`unnamed components should be updated if appropriate 1`] = `
+"import styled from "styled-components"
+const Div1 = styled.div\`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex-direction: column;
+\`
+
+
+const Div0 = styled(Div1)\`
+  flex-shrink: 1;
+\`
+
+const Div2 = styled(Div1)\`
+  flex-grow: 1;
+\`
+
+export default function Component() {
+  return (
+    (<Div0>
+      <Div2 />
+    </Div0>)
+  );
+}
+"
+`;
+
+exports[`user-named components should not be overwritten 1`] = `
+"import styled from "styled-components"
+const Div0 = styled.div\`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex-direction: column;
+  flex-grow: 1;
+\`
+
+
+const Foo = styled.div\`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex-direction: column;
+  flex-shrink: 1;
+\`
+
+export default function Component() {
+  return (
+    (<Foo>
+      <Div0 />
+    </Foo>)
+  );
+}
+"
+`;
