@@ -28,6 +28,8 @@ let SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS: number
 // https://stackoverflow.com/a/68821383/
 const isNumber = (value: string) => !isNaN(parseFloat(value))
 
+const toComponentName = (tagName: string) => `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}`
+
 function stringToCssObject(cssString: string): CSSDeclarations {
   return Object.fromEntries(
     cssString
@@ -82,15 +84,20 @@ function findSimilarComponent(
       }
     }
 
+    const existingComponentNeedsToBeRewritten = Object.keys(similarComponentOnlyStyle).length > 0
+    const isExistingComponentBeingNamed = !new RegExp(`^${toComponentName(existingComponent.tagName)}\\d+$`).test(
+      existingComponent.name
+    )
     const isExistingComponentBeingInherited =
       existingComponents.find(
         component => "extendedFrom" in component && component.extendedFrom === existingComponent
       ) !== undefined
-    if (
-      (Object.keys(similarComponentOnlyStyle).length === 0 || !isExistingComponentBeingInherited) &&
-      sameKeyCount >= SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS &&
-      sameKeyCount > maximumSameDeclarationCount
-    ) {
+    // Avoid rewriting components that are either named by the user or already being inherited
+    if (existingComponentNeedsToBeRewritten && (isExistingComponentBeingNamed || isExistingComponentBeingInherited)) {
+      continue
+    }
+
+    if (sameKeyCount >= SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS && sameKeyCount > maximumSameDeclarationCount) {
       maximumSameDeclarationCount = sameKeyCount
       mostSimilarComponent = existingComponent
       mostSimilarComponentCommonStyle = commonStyle
@@ -110,7 +117,7 @@ function findSimilarComponent(
 
 function generateNewComponentName(tagName: string, existingComponents: { name: string }[]) {
   for (let i = 0; ; i++) {
-    const name = `${tagName.charAt(0).toUpperCase()}${tagName.slice(1)}${i}`
+    const name = `${toComponentName(tagName)}${i}`
     if (existingComponents.find(component => component.name === name)) continue
     return name
   }
