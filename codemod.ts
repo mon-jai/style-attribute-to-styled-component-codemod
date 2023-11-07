@@ -1,5 +1,6 @@
 import type {
   API,
+  ASTPath,
   Collection,
   FileInfo,
   JSCodeshift,
@@ -8,16 +9,37 @@ import type {
   ObjectExpression,
   Options,
   Property,
-  VariableDeclarator
+  VariableDeclaration
 } from "jscodeshift"
 
 type CSSDeclarations = { [key: string]: string | number }
-type StyledComponent = { name: string; tagName: string; css: CSSDeclarations }
+type StyledComponent = {
+  name: string
+  tagName: string
+  css: CSSDeclarations
+  declaration?: ASTPath<VariableDeclaration>
+}
 type StyledComponentInheritingOtherComponent = StyledComponent & { extendedFrom: StyledComponent }
 
 let SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS: number
 
 // Utility functions
+
+// https://stackoverflow.com/a/68821383/
+const isNumber = (value: string) => !isNaN(parseFloat(value))
+
+function stringToCssObject(cssString: string): CSSDeclarations {
+  return Object.fromEntries(
+    cssString
+      .split(";")
+      .map(declaration => declaration.trim())
+      .filter(declaration => declaration.includes(":"))
+      .map(declaration => {
+        const [property, value] = declaration.split(":").map(value => value.trim()) as [string, string]
+        return [property, isNumber(value) ? parseFloat(value) : value]
+      })
+  )
+}
 
 function isEqualCssObject(object_1: CSSDeclarations, object_2: CSSDeclarations): boolean {
   if (Object.keys(object_1).length !== Object.keys(object_2).length) return false
@@ -35,7 +57,7 @@ function findSimilarComponent(
   existingComponents: (StyledComponent | StyledComponentInheritingOtherComponent)[]
 ) {
   let maximumSameDeclarationCount = 0
-  let mostSimilarComponent: StyledComponent | undefined = undefined
+  let mostSimilarComponent: StyledComponent | StyledComponentInheritingOtherComponent | undefined = undefined
   let mostSimilarComponentCommonStyle: CSSDeclarations = {}
   let mostSimilarComponentOnlyStyle: CSSDeclarations = {}
 
@@ -45,14 +67,14 @@ function findSimilarComponent(
     let sameKeyCount = 0
     const commonStyle: CSSDeclarations = {}
     const similarComponentOnlyStyle: CSSDeclarations = {}
-    const isExistingComponentBeingInherited =
-      existingComponents.find(
-        component => "extendedFrom" in component && component.extendedFrom === existingComponent
-      ) !== undefined
 
-    for (const property in existingComponent.css) {
-      const value = existingComponent.css[property as keyof typeof existingComponent.css]!
-      if (component.css[property as keyof typeof component.css] === value) {
+    const existingComponentCss = {
+      ...existingComponent.css,
+      ...("extendedFrom" in existingComponent ? existingComponent.extendedFrom.css : {})
+    }
+    for (const property in existingComponentCss) {
+      const value = existingComponentCss[property as keyof typeof existingComponentCss]!
+      if (property in component.css && component.css[property] === value) {
         sameKeyCount++
         commonStyle[property] = value
       } else {
@@ -60,6 +82,10 @@ function findSimilarComponent(
       }
     }
 
+    const isExistingComponentBeingInherited =
+      existingComponents.find(
+        component => "extendedFrom" in component && component.extendedFrom === existingComponent
+      ) !== undefined
     if (
       (Object.keys(similarComponentOnlyStyle).length === 0 || !isExistingComponentBeingInherited) &&
       sameKeyCount >= SIMILAR_COMPONENTS_MINIMUM_COMMON_DECLARATIONS &&
@@ -93,40 +119,74 @@ function generateNewComponentName(tagName: string, existingComponents: { name: s
 // Functions called by `transform`
 
 function findExistingStyledComponents(root: Collection<any>, jscodeshift: JSCodeshift) {
-  const existingStyledComponents: StyledComponent[] = []
+  const existingStyledComponents: ((StyledComponent | StyledComponentInheritingOtherComponent) & {
+    declaration: Required<StyledComponent["declaration"]>
+  })[] = []
 
   root.find(jscodeshift.VariableDeclaration).forEach(variableDeclaration => {
-    const variableDeclarator = variableDeclaration.node.declarations.find(
-      (declaration): declaration is VariableDeclarator => declaration.type === "VariableDeclarator"
-    )
-    if (variableDeclarator === undefined) return
+    const variableDeclarator = variableDeclaration.node.declarations[0]
+    if (variableDeclarator?.type !== "VariableDeclarator") return
 
-    if (
-      variableDeclarator.init?.type !== "TaggedTemplateExpression" ||
-      variableDeclarator.init.tag.type !== "MemberExpression" ||
-      variableDeclarator.init.tag.object.type !== "Identifier" ||
-      variableDeclarator.init.tag.object.name !== "styled"
-    ) {
-      return
+    if (variableDeclarator.id.type !== "Identifier") return
+    const { name } = variableDeclarator.id
+
+    if (variableDeclarator.init?.type !== "TaggedTemplateExpression") return
+    if (variableDeclarator.init.quasi.quasis[0] === undefined) return
+    const cssString = variableDeclarator.init.quasi.quasis[0].value.raw
+
+    if (variableDeclarator.init.tag.type === "CallExpression") {
+      if (variableDeclarator.init.tag.callee.type !== "Identifier") return
+      if (variableDeclarator.init.tag.callee.name !== "styled") return
+
+      if (variableDeclarator.init.tag.arguments[0]?.type !== "Identifier") return
+      const baseComponentName = variableDeclarator.init.tag.arguments[0].name
+
+      const baseComponent = root
+        .find(jscodeshift.VariableDeclaration, variableDeclaration => {
+          const variableDeclarator = variableDeclaration.declarations[0]
+          if (variableDeclarator?.type !== "VariableDeclarator") return false
+          if (variableDeclarator.id.type !== "Identifier") return false
+          return variableDeclarator.id.name === baseComponentName
+        })
+        .nodes()[0]
+
+      if (baseComponent?.declarations[0]?.type !== "VariableDeclarator") return
+      if (baseComponent.declarations[0].init?.type !== "TaggedTemplateExpression") return
+
+      if (baseComponent.declarations[0].init.tag.type !== "MemberExpression") return
+      if (baseComponent.declarations[0].init.tag.property.type !== "Identifier") return
+      const tagName = baseComponent.declarations[0].init.tag.property.name
+
+      if (baseComponent.declarations[0].init.quasi.quasis[0] === undefined) return
+      const baseComponentCssString = baseComponent.declarations[0].init.quasi.quasis[0].value.raw
+
+      existingStyledComponents.push({
+        name,
+        tagName,
+        css: stringToCssObject(cssString),
+        extendedFrom: {
+          name: baseComponentName,
+          tagName,
+          css: stringToCssObject(baseComponentCssString)
+        },
+        declaration: variableDeclaration
+      })
+    } else if (variableDeclarator.init.tag.type === "MemberExpression") {
+      if (variableDeclarator.init.tag.object.type !== "Identifier") return
+      if (variableDeclarator.init.tag.object.name !== "styled") return
+
+      if (variableDeclarator.init.tag.property.type !== "Identifier") return
+      const tagName = variableDeclarator.init.tag.property.name
+
+      existingStyledComponents.push({
+        name,
+        tagName,
+        css: stringToCssObject(cssString),
+        declaration: variableDeclaration
+      })
+    } else {
+      throw "Not implemented"
     }
-
-    const id = variableDeclarator.id
-    if (id.type !== "Identifier") return
-
-    const { name } = id
-    existingStyledComponents.push({
-      name,
-      tagName:
-        variableDeclarator.init.tag.property.type === "Identifier"
-          ? variableDeclarator.init.tag.property.name
-          : "ExtendedComponent",
-      css: Object.fromEntries(
-        variableDeclarator.init.quasi.quasis[0]!.value.raw.split(";")
-          .map(declaration => declaration.trim())
-          .filter(declaration => declaration.includes(":"))
-          .map(declaration => declaration.split(":").map(value => value.trim()))
-      )
-    })
   })
 
   return existingStyledComponents
@@ -163,12 +223,19 @@ function categorizeComponent(
   cssObject: CSSDeclarations,
   existingStyledComponents: (StyledComponent | StyledComponentInheritingOtherComponent)[],
   styledComponentsFromScratch: StyledComponent[],
-  styledComponentsInheritingOtherComponents: StyledComponentInheritingOtherComponent[]
+  styledComponentsInheritingOtherComponents: StyledComponentInheritingOtherComponent[],
+  jscodeshift: JSCodeshift
 ) {
   const sameComponent =
     styledComponentsFromScratch.find(({ css }) => isEqualCssObject(cssObject, css)) ??
     styledComponentsInheritingOtherComponents.find(({ css, extendedFrom }) =>
       isEqualCssObject(cssObject, { ...extendedFrom.css, ...css })
+    ) ??
+    existingStyledComponents.find(component =>
+      isEqualCssObject(cssObject, {
+        ...("extendedFrom" in component ? component.extendedFrom.css : {}),
+        ...component.css
+      })
     )
   if (sameComponent !== undefined) return sameComponent.name
 
@@ -179,7 +246,7 @@ function categorizeComponent(
   ]
   const { similarComponent, commonStyle, currentComponentOnlyStyle, similarComponentOnlyStyle } = findSimilarComponent(
     { tagName, css: cssObject },
-    allStyledComponents.filter(component => component.tagName !== "ExtendedComponent")
+    allStyledComponents
   )
 
   if (similarComponent === undefined) {
@@ -209,8 +276,11 @@ function categorizeComponent(
   const newSimilarComponent = { ...similarComponent, extendedFrom: baseComponent, css: similarComponentOnlyStyle }
   const similarComponentIndex = styledComponentsFromScratch.findIndex(({ name }) => name === similarComponent.name)
 
+  if ("declaration" in similarComponent) jscodeshift(similarComponent.declaration).remove()
+  // Remove `similarComponent` from `styledComponentsFromScratch`
+  if (similarComponentIndex !== -1) styledComponentsFromScratch.splice(similarComponentIndex, 1)
+
   allStyledComponents.push(baseComponent)
-  styledComponentsFromScratch.splice(similarComponentIndex, 1) // Remove `similarComponent` from `styledComponentsFromScratch`
   styledComponentsFromScratch.push(baseComponent)
   styledComponentsInheritingOtherComponents.push(newSimilarComponent)
 
@@ -286,7 +356,8 @@ export default function transform(file: FileInfo, api: API, options: Options): s
       cssObject,
       existingStyledComponents,
       styledComponentsFromScratch,
-      styledComponentsInheritingOtherComponents
+      styledComponentsInheritingOtherComponents,
+      jscodeshift
     )
 
     // Replace element with a styled component
