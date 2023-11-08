@@ -16,7 +16,8 @@ const Div1 = styled(Div0)`
 
 export default function Component() {
   return (
-    <Div1>
+    <>
+      <Div1 />
       <div
         style={{
           commonProperty1: "value-1",
@@ -27,6 +28,6 @@ export default function Component() {
           commonProperty6: "value-6"
         }}
       />
-    </Div1>
+    </>
   )
 }
